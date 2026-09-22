@@ -1,0 +1,31 @@
+version: 2
+updates:
+  # Providers e módulos do Terraform. O `.terraform.lock.hcl` trava provider, mas
+  # NÃO trava módulo — e os módulos aqui são pinados em versão exata de propósito,
+  # então o bump de módulo precisa mesmo vir como PR explícito.
+  - package-ecosystem: terraform
+    directories:
+      - /modules/database
+      - /envs/homolog
+      - /envs/prod
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      terraform:
+        patterns: ['*']
+    commit-message:
+      prefix: chore
+
+  # Actions de terceiros são pinadas por SHA (ver CONTRIBUTING R8). Sem o
+  # Dependabot, um pin por SHA vira versão congelada para sempre, inclusive
+  # quando sai correção de segurança.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+    commit-message:
+      prefix: ci
