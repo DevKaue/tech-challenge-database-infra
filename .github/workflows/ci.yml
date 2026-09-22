@@ -1,0 +1,175 @@
+name: CI
+
+# `homolog` entra nos gatilhos DESDE JÁ, antes de qualquer status check virar
+# obrigatório. O repositório-base dispara só em [develop, main]; com a branch de
+# homologação fora da lista, um PR para ela nunca dispara o CI, o check fica
+# eternamente em "Expected — Waiting for status to be reported", e com a lista de
+# bypass vazia nem o PR que consertaria isso consegue ser mergeado.
+on:
+  pull_request:
+    branches: [develop, homolog, main]
+  push:
+    branches: [develop, homolog, main]
+
+concurrency:
+  # Inclui o nome do workflow: o repositório-base agrupa só pelo ref, então dois
+  # workflows diferentes no mesmo ref cancelam um ao outro.
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  commits:
+    name: Commits e título do PR
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      # Sem commitlint de propósito: este é um repositório de infraestrutura e
+      # arrastar `npm ci` e um node_modules inteiro só para validar texto não se
+      # paga. `grep -E` resolve, no mesmo espírito dos guards do repositório-base.
+      - name: Validar o título do PR
+        env:
+          TITULO: ${{ github.event.pull_request.title }}
+        run: |
+          # Com squash merge, o TÍTULO do PR é o que vira a mensagem final no
+          # develop — por isso ele é validado, e não só os commits.
+          if ! printf '%s' "$TITULO" | grep -qE '^(feat|fix|docs|chore|refactor|style|test|perf|build|ci|revert)(\([a-z0-9-]+\))?!?: .{1,}$'; then
+            echo "::error::Título fora do Conventional Commits: '$TITULO'"
+            echo "Esperado: '<tipo>: descrição em pt-BR, imperativo, minúscula, sem ponto final'"
+            echo "Tipos: feat|fix|docs|chore|refactor|style|test|perf|build|ci|revert"
+            exit 1
+          fi
+          if [ ${#TITULO} -gt 72 ]; then
+            echo "::error::Título com ${#TITULO} caracteres; o limite é 72"
+            exit 1
+          fi
+
+      - name: Recusar tipos proibidos
+        env:
+          TITULO: ${{ github.event.pull_request.title }}
+        run: |
+          # Aparecem no histórico do repositório-base e não se repetem aqui.
+          if printf '%s' "$TITULO" | grep -qE '^(refact|refator|config|merge):'; then
+            echo "::error::Tipo proibido. Use refactor:, chore: ou ci: conforme o caso."
+            exit 1
+          fi
+
+  terraform:
+    name: Validação do Terraform
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [homolog, prod]
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: '1.10.5'
+          terraform_wrapper: false
+
+      - name: Formatação
+        run: terraform fmt -check -recursive
+
+      # -backend=false: valida sem credencial da AWS e sem tocar no state do S3.
+      - name: Init
+        working-directory: envs/${{ matrix.env }}
+        run: terraform init -backend=false
+
+      - name: Validate
+        working-directory: envs/${{ matrix.env }}
+        run: terraform validate
+
+  seguranca:
+    name: Scan de misconfiguração
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # Pinada por SHA: o repositório-base usa `@master`, e um check novo do
+      # Trivy publicado entre o desenvolvimento e a entrega deixa o CI vermelho
+      # sozinho, sem ninguém ter mudado nada.
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          # O cache .terraform traz os YAML de EXEMPLO dos módulos da comunidade,
+          # que não são nosso código.
+          skip-dirs: '**/.terraform'
+          trivyignores: .trivyignore
+          severity: MEDIUM,HIGH,CRITICAL
+          exit-code: '1'
+
+  contrato:
+    name: Contrato de outputs e guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # Renomear um output é breaking change SILENCIOSO: o plan do consumidor
+      # falha com "Unsupported attribute", longe deste repositório. Este guard
+      # transforma isso em PR vermelho.
+      - name: Outputs obrigatórios presentes nos dois ambientes
+        run: |
+          faltando=0
+          for env in homolog prod; do
+            for out in db_endpoint db_host db_port db_name db_username \
+                       db_security_group_id db_client_security_group_id \
+                       db_password_ssm_path ssm_prefix; do
+              grep -q "output \"$out\"" "envs/$env/outputs.tf" || {
+                echo "::error::envs/$env/outputs.tf não exporta '$out'"; faltando=1; }
+            done
+          done
+          exit $faltando
+
+      - name: Nenhum endpoint literal commitado
+        run: |
+          # Endpoint copiado na mão é o começo de três verdades divergentes. O
+          # canal único é o SSM.
+          if grep -rIn --include='*.tf' --include='*.tfvars' --include='*.yml' \
+               -e 'rds\.amazonaws\.com' . ; then
+            echo "::error::endpoint de RDS literal no código — use o SSM"
+            exit 1
+          fi
+
+      - name: Nenhuma chave estática da AWS nos workflows
+        run: |
+          # Casa o USO (`secrets.AWS_...` ou `AWS_...:` como variável de
+          # ambiente), não a menção. Procurar o nome solto faria este guard
+          # falhar contra o próprio texto dele — que é exatamente o que
+          # aconteceu na primeira versão.
+          if grep -rInE 'secrets\.AWS_(ACCESS_KEY_ID|SECRET_ACCESS_KEY)|AWS_(ACCESS_KEY_ID|SECRET_ACCESS_KEY)[[:space:]]*:' .github/ ; then
+            echo "::error::credencial estática encontrada — o acesso à AWS é por OIDC"
+            exit 1
+          fi
+
+      - name: Produção precisa estar endurecida
+        run: |
+          # Esta é a diferença que separa os dois ambientes. Se alguém copiar o
+          # main.tf de homologação por cima do de produção, o plan continua
+          # válido e o banco de produção fica sem proteção nenhuma.
+          grep -q 'deletion_protection   = true'  envs/prod/main.tf || { echo "::error::envs/prod sem deletion_protection"; exit 1; }
+          grep -q 'skip_final_snapshot   = false' envs/prod/main.tf || { echo "::error::envs/prod com skip_final_snapshot"; exit 1; }
+
+      - name: .trivyignore com justificativa em toda entrada
+        run: |
+          # Entrada sem porquê vira tapete. Toda linha de regra precisa ter um
+          # comentário imediatamente antes.
+          anterior=""
+          erro=0
+          while IFS= read -r linha; do
+            case "$linha" in
+              ''|'#'*) anterior="$linha" ;;
+              *)
+                case "$anterior" in
+                  '#'*) : ;;
+                  *) echo "::error::regra '$linha' sem justificativa no .trivyignore"; erro=1 ;;
+                esac
+                anterior="$linha" ;;
+            esac
+          done < .trivyignore
+          exit $erro
