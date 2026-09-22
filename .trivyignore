@@ -1,0 +1,42 @@
+# Achados aceitos conscientemente. Cada entrada precisa de um porquê E de um
+# critério de revalidação — sem isso vira tapete para esconder problema. Entrada
+# sem achado correspondente também reprova o PR: ignore órfão é ruído e
+# enfraquece o arquivo.
+#
+# Migrados do repositório-base apenas os achados que são DESTE repositório. Os do
+# EKS (AWS-0040, AWS-0041, AWS-0104) ficaram lá, onde o cluster mora.
+
+# AWS-0176 — RDS sem autenticação IAM.
+# A aplicação e a Lambda autenticam por usuário/senha lidos do SSM. Migrar para
+# IAM auth exigiria renovar token a cada 15 minutos em dois consumidores
+# diferentes, um deles serverless.
+# Revalidar quando: o banco passar a ter dado real de cliente.
+AWS-0176
+
+# AWS-0177 — RDS sem deletion protection.
+# Vale SÓ para homologação, que é descartável de propósito e precisa que o
+# `terraform destroy` agendado rode sem intervenção manual. Em produção
+# (envs/prod) `deletion_protection = true`, e a policy do CI reprova o plan que
+# tentar o contrário.
+# Revalidar quando: homologação deixar de ser efêmera.
+AWS-0177
+
+# AWS-0077 — retenção de backup baixa.
+# IMPOSIÇÃO DO FREE TIER, não escolha de engenharia: contas no plano gratuito
+# recusam retenção > 0 com FreeTierRestrictionError, e o erro só aparece no
+# apply. Num plano pago, produção vai para 7.
+# Revalidar quando: a conta sair do Free Tier.
+AWS-0077
+
+# AWS-0080 — RDS cifrado com a chave gerenciada do serviço, não com CMK própria.
+# `storage_encrypted = true` usa `aws/rds`. Uma CMK custa ~US$1/mês por ambiente
+# e o ganho aqui é controle de rotação da chave, que ninguém vai exercer num
+# ambiente acadêmico descartável.
+# Revalidar quando: houver requisito de compliance sobre custódia de chave.
+AWS-0080
+
+# AVD-AWS-0067 — parâmetro do SSM SecureString com a chave KMS padrão.
+# Mesmo raciocínio do AWS-0080: o controle real é a policy de IAM por path
+# (`/techchallenge/<env>/db/*`), não a custódia da chave.
+# Revalidar quando: houver requisito de compliance sobre custódia de chave.
+AVD-AWS-0067
