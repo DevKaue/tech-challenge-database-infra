@@ -3,7 +3,7 @@
 # Sobre `prevent_destroy`: ele NÃO é usado aqui, e a ausência é deliberada. O
 # meta-argumento exige valor literal (não aceita variável) e só existe em
 # `resource`, não em `module` — colocá-lo dentro do módulo compartilhado
-# bloquearia também o destroy do homolog efêmero, que precisa funcionar sem
+# bloquearia também o destroy do staging efêmero, que precisa funcionar sem
 # intervenção. A proteção equivalente, e que vale no lado da AWS em vez de só no
 # Terraform, é `deletion_protection`: a própria API do RDS recusa a exclusão.
 #

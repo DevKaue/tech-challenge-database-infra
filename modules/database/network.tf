@@ -24,6 +24,15 @@ data "aws_vpc" "this" {
     name   = "tag:ManagedBy"
     values = ["terraform"]
   }
+
+  # A infra Kubernetes cria uma VPC por ambiente (staging e prod), as duas com
+  # Project=techchallenge. Sem este filtro, o data source acha duas VPCs e o
+  # plan falha com "multiple VPC matched" assim que o segundo ambiente existir;
+  # ou, pior, com uma só aplicada, o banco de prod nasce na VPC de staging.
+  filter {
+    name   = "tag:Environment"
+    values = [var.environment]
+  }
 }
 
 data "aws_subnets" "private" {

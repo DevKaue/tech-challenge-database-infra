@@ -35,7 +35,7 @@ override_data {
 }
 
 variables {
-  environment = "homolog"
+  environment = "staging"
 }
 
 run "contrato_de_descoberta_no_ssm" {
@@ -44,23 +44,23 @@ run "contrato_de_descoberta_no_ssm" {
   # Estes paths são lidos pela Lambda (env DB_SSM_PREFIX) e pelo repositório de
   # Kubernetes. Mudar qualquer um aqui quebra os dois consumidores em silêncio.
   assert {
-    condition     = output.ssm_prefix == "/techchallenge/homolog/db"
+    condition     = output.ssm_prefix == "/techchallenge/staging/db"
     error_message = "Prefixo do SSM mudou — é contrato com a Lambda e com o Kubernetes."
   }
 
   assert {
-    condition     = output.db_password_ssm_path == "/techchallenge/homolog/db/password"
+    condition     = output.db_password_ssm_path == "/techchallenge/staging/db/password"
     error_message = "Path da senha mudou — a Lambda lê exatamente este path."
   }
 
   assert {
     condition = alltrue([
-      aws_ssm_parameter.db_endpoint.name == "/techchallenge/homolog/db/endpoint",
-      aws_ssm_parameter.db_host.name == "/techchallenge/homolog/db/host",
-      aws_ssm_parameter.db_port.name == "/techchallenge/homolog/db/port",
-      aws_ssm_parameter.db_name.name == "/techchallenge/homolog/db/name",
-      aws_ssm_parameter.db_username.name == "/techchallenge/homolog/db/username",
-      aws_ssm_parameter.db_client_sg_id.name == "/techchallenge/homolog/db/client-sg-id",
+      aws_ssm_parameter.db_endpoint.name == "/techchallenge/staging/db/endpoint",
+      aws_ssm_parameter.db_host.name == "/techchallenge/staging/db/host",
+      aws_ssm_parameter.db_port.name == "/techchallenge/staging/db/port",
+      aws_ssm_parameter.db_name.name == "/techchallenge/staging/db/name",
+      aws_ssm_parameter.db_username.name == "/techchallenge/staging/db/username",
+      aws_ssm_parameter.db_client_sg_id.name == "/techchallenge/staging/db/client-sg-id",
     ])
     error_message = "Algum parâmetro de descoberta saiu do path documentado na tabela do README do módulo."
   }
@@ -146,7 +146,7 @@ run "observabilidade_sem_forwarder" {
 
   assert {
     condition = alltrue([
-      aws_cloudwatch_metric_alarm.cpu.alarm_name == "techchallenge-homolog-rds-cpu",
+      aws_cloudwatch_metric_alarm.cpu.alarm_name == "techchallenge-staging-rds-cpu",
       aws_cloudwatch_metric_alarm.connections.threshold == 80,
       aws_cloudwatch_metric_alarm.freeable_memory.threshold == 134217728,
     ])

@@ -3,7 +3,7 @@
 Provisiona o PostgreSQL gerenciado de **um** ambiente e publica o contrato de
 descoberta que os outros repositórios consomem.
 
-Chamado por `envs/homolog` e `envs/prod`. Não tem backend próprio nem provider
+Chamado por `envs/staging` e `envs/prod`. Não tem backend próprio nem provider
 configurado — quem faz isso é o ambiente.
 
 ## Arquivos

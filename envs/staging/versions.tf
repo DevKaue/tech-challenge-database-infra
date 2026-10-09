@@ -20,7 +20,7 @@ terraform {
   # aparece no path, no diff do PR e aqui.
   backend "s3" {
     bucket       = "techchallenge-fiap-v1"
-    key          = "db/homolog/terraform.tfstate"
+    key          = "db/staging/terraform.tfstate"
     region       = "us-east-1"
     encrypt      = true
     use_lockfile = true # locking nativo do S3 (1.10+), sem DynamoDB

@@ -1,4 +1,9 @@
-# Homologação: perfil DESCARTÁVEL de propósito.
+# Homologação (`staging`): perfil DESCARTÁVEL de propósito.
+#
+# O nome é `staging`, e não `homolog`, porque é o nome que o Kong e a infra
+# Kubernetes usam (ADR-005 do repositório da aplicação): o cluster de staging
+# procura o banco em /techchallenge/staging/db. Com outro nome, a Lambda e a
+# aplicação desse ambiente leriam um prefixo que ninguém publica.
 #
 # A decisão de produto é que homologação existe para provar o bullet "deploy
 # automático das branches de homologação e produção" — e esse bullet se prova com
@@ -13,7 +18,7 @@ module "database" {
   source = "../../modules/database"
 
   project     = var.project
-  environment = "homolog"
+  environment = "staging"
 
   db_instance_class = var.db_instance_class
 
