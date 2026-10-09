@@ -84,6 +84,27 @@ jobs:
         working-directory: envs/${{ matrix.env }}
         run: terraform validate
 
+  testes:
+    name: Testes do módulo (terraform test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: '1.10.5'
+          terraform_wrapper: false
+
+      # Provider mockado e `command = plan`: roda sem credencial e não cria nada.
+      # É o que prova o contrato de paths do SSM que a Lambda e o cluster leem.
+      - name: Init
+        working-directory: modules/database
+        run: terraform init -backend=false
+
+      - name: Test
+        working-directory: modules/database
+        run: terraform test
+
   seguranca:
     name: Scan de misconfiguração
     runs-on: ubuntu-latest
