@@ -1,0 +1,61 @@
+graph TB
+    classDef gh fill:#fff2cc,stroke:#d6b656
+    classDef deploy fill:#dae8fc,stroke:#6c8ebf
+    classDef aws fill:#ffe6cc,stroke:#d79b00
+    classDef data fill:#f8cecc,stroke:#b85450
+    classDef ext fill:#f5f5f5,stroke:#666
+
+    subgraph REPO["Este repositório"]
+        direction TB
+        ENVS["envs/staging · envs/prod<br/>backend com key literal"]
+        MOD["modules/database<br/>terraform-aws-modules/rds 6.13.1"]
+        WF["deploy.yml<br/>plan · guarda · apply · confere SSM"]
+    end
+
+    S3[("S3 techchallenge-fiap-v1<br/>db/&lt;env&gt;/terraform.tfstate<br/>use_lockfile")]
+
+    subgraph AWS["Conta AWS · us-east-1"]
+        direction TB
+
+        subgraph VPC["VPC do ambiente · criada pela infra Kubernetes<br/>tags Project · Environment · ManagedBy"]
+            direction TB
+            subgraph PRIV["Subnets privadas · kubernetes.io/role/internal-elb = 1"]
+                RDS[("RDS PostgreSQL 15<br/>techchallenge-&lt;env&gt;<br/>db.t4g.micro · single-AZ<br/>20 GB cifrado · sem IP público")]
+            end
+            SGR["SG techchallenge-&lt;env&gt;-rds<br/>ingress 5432 só do SG de cliente"]
+            SGC["SG techchallenge-&lt;env&gt;-db-client<br/>egress 5432 para o SG do RDS"]
+            NODES["Nós do EKS<br/>aplicação"]
+            LAMBDA["Lambda techchallenge-auth-&lt;env&gt;"]
+        end
+
+        PG["Parameter group postgres15<br/>rds.force_ssl = 1<br/>log_min_duration_statement = 1000<br/>pg_stat_statements"]
+        SSM["SSM /techchallenge/&lt;env&gt;/db/<br/>endpoint · host · port · name · username<br/>password SecureString · client-sg-id"]
+        CW["CloudWatch<br/>4 alarmes · dashboard<br/>logs postgresql e upgrade, 7 dias"]
+    end
+
+    OBS["Datadog / New Relic<br/>forwarder opcional"]
+
+    ENVS --> MOD
+    WF -->|"terraform apply"| ENVS
+    ENVS -->|"state"| S3
+    MOD -.->|"descobre por tag"| VPC
+    MOD --> RDS
+    MOD --> SSM
+    MOD --> CW
+    PG -.->|"aplicado em"| RDS
+    SGR -.->|"protege"| RDS
+    NODES -.->|"anexa"| SGC
+    LAMBDA -.->|"anexa"| SGC
+    SGC -->|"TLS 5432"| RDS
+    NODES -.->|"deploy lê o contrato"| SSM
+    LAMBDA -.->|"lê na primeira requisição"| SSM
+    RDS -->|"métricas e logs"| CW
+    CW -.->|"subscription filter se log_forwarder_arn"| OBS
+
+    style REPO fill:#fbfbfb,stroke:#999,stroke-dasharray:3
+    style AWS fill:#fdf4ec,stroke:#999,stroke-dasharray:3
+
+    class ENVS,MOD,WF deploy
+    class S3,PG,SSM,CW,SGR,SGC aws
+    class RDS data
+    class NODES,LAMBDA,OBS ext

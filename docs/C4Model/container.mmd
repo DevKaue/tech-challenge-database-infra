@@ -1,0 +1,39 @@
+graph TD
+    %% Estilos das Classes (mantendo identidade visual do diagrama de contexto)
+    classDef person fill:#084298,stroke:#052c65,stroke-width:2px,color:#ffffff,rx:10px,ry:10px;
+    classDef systemBoundary fill:#e7f1ff,stroke:#0b4884,stroke-width:2px,color:#052c65,rx:10px,ry:10px;
+    classDef container fill:#1168bd,stroke:#0b4884,stroke-width:2px,color:#ffffff,rx:8px,ry:8px;
+    classDef database fill:#0b4884,stroke:#052c65,stroke-width:2px,color:#ffffff,rx:8px,ry:8px;
+    classDef extSystem fill:#999999,stroke:#666666,stroke-width:2px,color:#ffffff,rx:8px,ry:8px;
+
+    %% Sistemas externos
+    GHA["<b>GitHub Actions</b><br/><i>[Software System]</i><br/>deploy.yml do ambiente da branch"]:::extSystem
+    S3[("<b>Bucket de state</b><br/><i>[Software System: S3]</i><br/>db/staging e db/prod, use_lockfile")]:::extSystem
+    VPC["<b>VPC do ambiente</b><br/><i>[Software System]</i><br/>Criada pela infra Kubernetes; tags Project, Environment, ManagedBy"]:::extSystem
+    APP["<b>API Oficina no EKS</b><br/><i>[Software System]</i><br/>NestJS + Prisma; nós carregam o SG de cliente"]:::extSystem
+    FN["<b>Lambda techchallenge-auth-env</b><br/><i>[Software System]</i><br/>Node.js + pg; carrega o SG de cliente"]:::extSystem
+    OBS["<b>Datadog / New Relic</b><br/><i>[Software System]</i><br/>Forwarder de logs, opcional"]:::extSystem
+
+    %% Fronteira do Sistema
+    subgraph SB["Banco de dados gerenciado - um por ambiente"]
+        direction TB
+        DB[("<b>PostgreSQL 15</b><br/><i>[Container: Amazon RDS]</i><br/>db.t4g.micro, single-AZ, 20 GB cifrado, subnets privadas<br/>Armazena clientes, veículos, OS, orçamentos e usuários")]:::database
+        PG["<b>Parameter group</b><br/><i>[Container: RDS parameter group]</i><br/>rds.force_ssl, log de queries acima de 1 s, pg_stat_statements"]:::container
+        SG["<b>Security groups</b><br/><i>[Container: EC2 security group]</i><br/>SG do RDS aceita 5432 só do SG de cliente publicado"]:::container
+        SSM["<b>Contrato de conexão</b><br/><i>[Container: SSM Parameter Store]</i><br/>/techchallenge/env/db/: endpoint, host, port, name, username, password, client-sg-id"]:::container
+        CW["<b>Observabilidade</b><br/><i>[Container: CloudWatch]</i><br/>4 alarmes, dashboard, log groups postgresql e upgrade"]:::container
+    end
+    class SB systemBoundary
+
+    %% Relacionamentos
+    GHA -->|"terraform apply, credenciais OIDC ou do lab"| SB
+    GHA -->|"state e lock"| S3
+    SB -.->|"data source por tag"| VPC
+    PG -->|"configura"| DB
+    SG -->|"filtra 5432/tcp"| DB
+    APP -->|"Prisma, SQL sobre TLS, TCP 5432"| DB
+    FN -->|"pg, SELECT em customers sobre TLS, TCP 5432"| DB
+    APP -.->|"deploy lê o contrato"| SSM
+    FN -.->|"lê o contrato"| SSM
+    DB -->|"métricas e logs"| CW
+    CW -.->|"subscription filter"| OBS

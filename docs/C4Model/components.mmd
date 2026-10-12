@@ -1,0 +1,55 @@
+graph TD
+    %% Estilos visuais
+    classDef systemBoundary fill:#e7f1ff,stroke:#0b4884,stroke-width:2px,color:#052c65,rx:10px,ry:10px;
+    classDef container fill:#1168bd,stroke:#0b4884,stroke-width:2px,color:#ffffff,rx:8px,ry:8px;
+    classDef component fill:#1f78d1,stroke:#0b4884,stroke-width:2px,color:#ffffff,rx:8px,ry:8px;
+    classDef sharedKernel fill:#0d5ca6,stroke:#083b6c,stroke-width:2px,color:#ffffff,rx:8px,ry:8px;
+    classDef infra fill:#0a4f92,stroke:#063867,stroke-width:2px,color:#ffffff,rx:8px,ry:8px;
+    classDef database fill:#0b4884,stroke:#052c65,stroke-width:2px,color:#ffffff,rx:8px,ry:8px;
+    classDef extSystem fill:#999999,stroke:#666666,stroke-width:2px,color:#ffffff,rx:8px,ry:8px;
+
+    %% Raízes por ambiente
+    STG["<b>envs/staging</b><br/><i>[Root module]</i><br/>Perfil descartável; key db/staging"]:::infra
+    PRD["<b>envs/prod</b><br/><i>[Root module]</i><br/>Perfil endurecido; key db/prod"]:::infra
+
+    %% Externos
+    VPC["<b>VPC e subnets privadas</b><br/><i>[Infra Kubernetes]</i>"]:::extSystem
+    RDSMOD["<b>terraform-aws-modules/rds/aws</b><br/><i>[Módulo da comunidade, 6.13.1]</i>"]:::extSystem
+    CONS["<b>Consumidores</b><br/><i>[API Oficina e Lambda]</i>"]:::extSystem
+
+    subgraph SB["modules/database"]
+        direction TB
+        MAIN["<b>main.tf</b><br/><i>[Component: locals]</i><br/>Nome, tags e prefixo do SSM"]:::sharedKernel
+        VAR["<b>variables.tf</b><br/><i>[Component: entradas]</i><br/>Validações de ambiente, storage e retenção"]:::sharedKernel
+        NET["<b>network.tf</b><br/><i>[Component: descoberta]</i><br/>VPC e subnets por tag + bloco check"]:::component
+        SGS["<b>security-groups.tf</b><br/><i>[Component: rede]</i><br/>SG do RDS e SG de cliente"]:::component
+        PGR["<b>parameter-group.tf</b><br/><i>[Component: parâmetros]</i><br/>force_ssl, log 1 s, pg_stat_statements"]:::component
+        RDS["<b>rds.tf</b><br/><i>[Component: instância]</i><br/>random_password + módulo RDS"]:::component
+        SEC["<b>secrets.tf</b><br/><i>[Component: segredo]</i><br/>Senha em SSM SecureString"]:::component
+        DISC["<b>discovery.tf</b><br/><i>[Component: contrato]</i><br/>Endpoint, host, porta, nome, usuário, client-sg-id"]:::component
+        OBSV["<b>observability.tf</b><br/><i>[Component: observabilidade]</i><br/>Alarmes, dashboard, subscription filter"]:::component
+        OUT["<b>outputs.tf</b><br/><i>[Component: contrato]</i><br/>9 outputs conferidos pelo CI"]:::component
+        TEST["<b>tests/database.tftest.hcl</b><br/><i>[Component: testes]</i><br/>Provider mockado, command = plan"]:::component
+    end
+    class SB systemBoundary
+
+    STG -->|"module database"| SB
+    PRD -->|"module database"| SB
+
+    NET -.->|"data source por tag"| VPC
+    SGS -->|"vpc_id"| NET
+    RDS -->|"subnet_ids"| NET
+    RDS -->|"vpc_security_group_ids"| SGS
+    RDS -->|"parameters"| PGR
+    RDS -->|"source"| RDSMOD
+    SEC -->|"random_password"| RDS
+    DISC -->|"endpoint e porta"| RDS
+    DISC -->|"id do SG de cliente"| SGS
+    OBSV -->|"db_instance_identifier"| RDS
+    OUT --> DISC
+    OUT --> SEC
+    MAIN -.->|"tags e ssm_prefix"| DISC
+    VAR -.-> MAIN
+    TEST -.->|"assertions"| DISC
+    TEST -.->|"assertions"| SGS
+    CONS -.->|"leem /techchallenge/env/db/"| DISC
