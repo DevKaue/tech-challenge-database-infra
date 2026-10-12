@@ -164,9 +164,20 @@ jobs:
           # falhar contra o próprio texto dele — que é exatamente o que
           # aconteceu na primeira versão.
           if grep -rInE 'secrets\.AWS_(ACCESS_KEY_ID|SECRET_ACCESS_KEY)|AWS_(ACCESS_KEY_ID|SECRET_ACCESS_KEY)[[:space:]]*:' .github/ ; then
-            echo "::error::credencial estática encontrada — o acesso à AWS é por OIDC"
+            echo "::error::credencial estática encontrada — o acesso à AWS é por OIDC ou pelas credenciais temporárias do lab"
             exit 1
           fi
+
+      - name: Chave do AWS Academy só com session token
+        run: |
+          # O AWS Academy não permite criar a role do OIDC, e o deploy aceita as
+          # credenciais do lab como alternativa. Elas só são aceitáveis porque são
+          # TEMPORÁRIAS: sem session token, uma chave ali seria de usuário IAM,
+          # válida para sempre.
+          for f in $(grep -rlE '^[[:space:]]*aws-access-key-id:' .github/workflows/ || true); do
+            grep -qE 'aws-session-token:[[:space:]]*\$\{\{ *secrets\.AWS_LAB_SESSION_TOKEN' "$f" || {
+              echo "::error file=$f::aws-access-key-id sem aws-session-token do lab"; exit 1; }
+          done
 
       - name: Produção precisa estar endurecida
         run: |
