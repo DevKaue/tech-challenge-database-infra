@@ -12,7 +12,7 @@ graph TB
         WF["deploy.yml<br/>plan · guarda · apply · confere SSM"]
     end
 
-    S3[("S3 techchallenge-fiap-v1<br/>db/&lt;env&gt;/terraform.tfstate<br/>use_lockfile")]
+    S3[("S3 TF_STATE_BUCKET<br/>db/&lt;env&gt;/terraform.tfstate<br/>use_lockfile")]
 
     subgraph AWS["Conta AWS · us-east-1"]
         direction TB
