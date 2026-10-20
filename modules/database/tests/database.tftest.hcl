@@ -27,6 +27,14 @@ override_data {
   }
 }
 
+# O SG dos nós é publicado pela infra Kubernetes; aqui ele é fixado.
+override_data {
+  target = data.aws_ssm_parameter.eks_node_sg_id
+  values = {
+    value = "sg-0eks1111node2222a"
+  }
+}
+
 override_data {
   target = data.aws_region.current
   values = {
@@ -114,6 +122,23 @@ run "rede_fechada_por_security_group" {
       aws_vpc_security_group_egress_rule.client_to_rds.ip_protocol == "tcp",
     ])
     error_message = "Sem egress 5432 no SG de cliente, a Lambda dá timeout de conexão sem log útil."
+  }
+
+  # Contrato com a infra Kubernetes: ela publica o SG dos nós em
+  # /techchallenge/<env>/eks/node-sg-id, e é daqui que a aplicação chega no banco.
+  assert {
+    condition     = data.aws_ssm_parameter.eks_node_sg_id.name == "/techchallenge/staging/eks/node-sg-id"
+    error_message = "Path do SG dos nós mudou — é o que a infra Kubernetes publica."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_vpc_security_group_ingress_rule.rds_from_eks_nodes.referenced_security_group_id == "sg-0eks1111node2222a",
+      aws_vpc_security_group_ingress_rule.rds_from_eks_nodes.from_port == 5432,
+      aws_vpc_security_group_ingress_rule.rds_from_eks_nodes.to_port == 5432,
+      aws_vpc_security_group_ingress_rule.rds_from_eks_nodes.cidr_ipv4 == null,
+    ])
+    error_message = "Os nós do EKS precisam chegar no RDS só pela 5432 e só pelo SG deles."
   }
 }
 
