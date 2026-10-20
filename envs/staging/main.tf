@@ -9,7 +9,7 @@
 # automático das branches de homologação e produção" — e esse bullet se prova com
 # a EXECUÇÃO DA PIPELINE, não com a instância viva 24 horas por dia. A segunda
 # instância RDS sai do Free Tier (750 h/mês cobrem UMA), então esta aqui é
-# derrubada fora da janela de avaliação por workflow agendado.
+# derrubada fora da janela de avaliação pelo workflow `destroy.yml`.
 #
 # Por isso `deletion_protection = false` e `skip_final_snapshot = true`: o
 # destroy precisa rodar sem intervenção manual, senão sobra recurso queimando

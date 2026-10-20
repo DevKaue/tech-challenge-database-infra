@@ -15,7 +15,7 @@ AWS-0176
 
 # AWS-0177 — RDS sem deletion protection.
 # Vale SÓ para homologação, que é descartável de propósito e precisa que o
-# `terraform destroy` agendado rode sem intervenção manual. Em produção
+# `terraform destroy` do `destroy.yml` rode sem intervenção manual. Em produção
 # (envs/prod) `deletion_protection = true`, e a policy do CI reprova o plan que
 # tentar o contrário.
 # Revalidar quando: homologação deixar de ser efêmera.
