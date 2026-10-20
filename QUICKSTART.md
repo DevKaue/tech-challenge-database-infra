@@ -66,15 +66,24 @@ O `terraform test` precisa terminar com todos os `run` em `pass`, inclusive os q
 
 ### Passo 1 — bucket do state (uma vez por conta AWS)
 
+O bucket é criado pelo bootstrap da infraestrutura Kubernetes e compartilhado pelos
+quatro repositórios; as keys não colidem, porque este grava em `db/<env>/terraform.tfstate`.
+O nome **não** está no código: nome de bucket é global, e cada conta do AWS Academy precisa
+do seu. Guarde-o numa variável do shell:
+
 ```bash
-aws s3api create-bucket --bucket techchallenge-fiap-v1 --region us-east-1
-# Versionamento é o que permite recuperar um state corrompido ou sobrescrito.
-aws s3api put-bucket-versioning --bucket techchallenge-fiap-v1 \
-  --versioning-configuration Status=Enabled
+export TF_STATE_BUCKET=<nome do bucket do bootstrap>
+aws s3api head-bucket --bucket "$TF_STATE_BUCKET"   # precisa responder sem erro
 ```
 
-> Se o bucket já existe (a infraestrutura Kubernetes usa o mesmo), pule este passo. As
-> keys não colidem: este repositório grava em `db/<env>/terraform.tfstate`.
+Rodando este repositório sozinho, crie um com nome único e versionamento ligado (é o que
+permite recuperar um state corrompido ou sobrescrito):
+
+```bash
+aws s3api create-bucket --bucket "$TF_STATE_BUCKET" --region us-east-1
+aws s3api put-bucket-versioning --bucket "$TF_STATE_BUCKET" \
+  --versioning-configuration Status=Enabled
+```
 
 ### Passo 2 — conferir que a rede existe
 
@@ -102,7 +111,7 @@ Precisa sair **pelo menos duas** subnets — são as privadas, onde o banco vai 
 ```bash
 cd envs/staging
 cp example.tfvars terraform.tfvars      # gitignored; nenhuma senha aqui
-terraform init
+terraform init -backend-config="bucket=$TF_STATE_BUCKET"
 terraform plan -out=tfplan              # LEIA o plano antes
 ```
 
@@ -168,19 +177,28 @@ sozinho, no push:
 | `develop`, `homolog` | staging | `staging` |
 | `main` | prod | `production` |
 
-Configure, em **Settings → Environments**, os dois environments com **um** dos dois
-conjuntos de credencial:
+O job `plan` publica o plano no resumo do run; o job `apply` espera a aprovação do
+environment, planeja de novo e só aplica se o plano for igual ao aprovado.
 
-| Nome | Tipo | Para quê |
-|---|---|---|
-| `AWS_DEPLOY_ROLE` | secret | Role do OIDC, fora do AWS Academy |
-| `AWS_LAB_ACCESS_KEY_ID`, `AWS_LAB_SECRET_ACCESS_KEY`, `AWS_LAB_SESSION_TOKEN` | secret | Credenciais temporárias do AWS Academy; recoladas a cada sessão do lab |
-| `LOG_FORWARDER_ARN` | variável | Lambda que encaminha os logs ao Datadog/New Relic; vazio desliga |
-| `ALARM_ACTIONS` | variável | Lista JSON de ARNs de SNS dos alarmes, ex.: `["arn:aws:sns:..."]` |
+Configure **um** dos dois conjuntos de credencial, mais o bucket:
 
-No environment `production`, ligue **Required reviewers** e deixe **Prevent self-review**
-desligado ([ADR-000](docs/ADRs/ADR-000-bootstrap-do-repositorio.md)): o push na `main`
-para antes do apply e espera a aprovação.
+| Nome | Onde | Tipo | Para quê |
+|---|---|---|---|
+| `AWS_DEPLOY_ROLE` | repositório | secret | Role do OIDC, fora do AWS Academy |
+| `AWS_LAB_ACCESS_KEY_ID`, `AWS_LAB_SECRET_ACCESS_KEY`, `AWS_LAB_SESSION_TOKEN` | repositório | secret | Credenciais temporárias do AWS Academy; recoladas a cada sessão do lab |
+| `TF_STATE_BUCKET` | repositório | variável | Bucket do state, criado pelo bootstrap da infra Kubernetes e compartilhado pelos quatro repositórios |
+| `LOG_FORWARDER_ARN` | repositório | variável | Lambda que encaminha os logs ao Datadog/New Relic; vazio desliga |
+| `ALARM_ACTIONS` | repositório | variável | Lista JSON de ARNs de SNS dos alarmes, ex.: `["arn:aws:sns:..."]` |
+
+Tudo fica no nível do **repositório** (Settings → Secrets and variables → Actions), não do
+environment: o job de `plan` roda sem environment para o plano sair antes do gate, e só
+enxerga o que é do repositório. Os environments `staging` e `production` existem para o
+gate do `apply`.
+
+Crie os environments `staging` e `production` em **Settings → Environments**. No
+`production`, ligue **Required reviewers** e deixe **Prevent self-review** desligado
+([ADR-000](docs/ADRs/ADR-000-bootstrap-do-repositorio.md)): o job de apply para antes de
+começar e espera a aprovação, com o plano já visível no run.
 
 > O passo 4 (reboot) **não** é feito pelo pipeline. Depois do primeiro deploy de cada
 > ambiente, rode-o à mão.
@@ -190,6 +208,9 @@ para antes do apply e espera a aprovação.
 ## Derrubar
 
 ### Staging — ao fim de cada janela de avaliação
+
+Pelo GitHub: **Actions → Destroy do staging → Run workflow**, digitando `staging`. À mão,
+os passos abaixo.
 
 A ordem é a inversa da criação: **consumidores → banco → rede**. Enquanto a Lambda carregar o SG de
 cliente, a AWS recusa apagá-lo e o destroy para no meio. Os nós do EKS entram por uma
@@ -242,12 +263,12 @@ aws rds delete-db-snapshot --db-snapshot-identifier <id>
 | `FreeTierRestrictionError` no apply de prod | A conta recusa retenção de backup > 0. Baixe `backup_retention_days` para `0` em `envs/prod/main.tf` por PR e registre a dívida — o CI só guarda `deletion_protection` e `skip_final_snapshot` |
 | Pipeline para em "O plan não destrói o banco" | Algum atributo força o replace do `aws_db_instance`. **Não contorne a guarda**: leia o plan (`terraform show tfplan`) e procure `forces replacement` |
 | `Error acquiring the state lock` | Um run anterior foi interrompido. Confirme que nada está rodando e use `terraform force-unlock <ID>`; com `use_lockfile`, o lock é um objeto `.tflock` ao lado do state no S3 |
-| `ExpiredToken` / `InvalidClientTokenId` no deploy | As credenciais do AWS Academy expiraram com a sessão. Recole os três secrets `AWS_LAB_*` no environment |
+| `ExpiredToken` / `InvalidClientTokenId` no deploy | As credenciais do AWS Academy expiraram com a sessão. Recole os três secrets `AWS_LAB_*` do repositório |
 | Deploy assume a role com as chaves do lab | Os dois conjuntos de credencial estão preenchidos. Deixe só um |
 | `relation "pg_stat_statements" does not exist` | Faltou o reboot do passo 4 |
 | Consumidor recebe `no pg_hba.conf entry ... no encryption` | O cliente conectou sem TLS e o `rds.force_ssl = 1` recusou. Use `sslmode` no `DATABASE_URL` |
 | Lambda ou aplicação com **timeout** de conexão, sem log útil | O consumidor não carrega o SG de cliente (`client-sg-id`). Parece banco lento; é rede fechada |
-| Lambda responde **503** para todo CPF | As tabelas ainda não existem (`prisma migrate deploy` não rodou) ou falta a coluna `customers.status` — ver [modelagem de dados](docs/modelagem-de-dados.md#situação-migration-pendente-no-repositório-da-aplicação) |
+| Lambda responde **503** para todo CPF | As tabelas ainda não existem (`prisma migrate deploy` não rodou) ou falta a coluna `customers.status` — ver [modelagem de dados](docs/modelagem-de-dados.md#situação-migration-no-develop-da-aplicação) |
 | Destroy do staging para em `DependencyViolation` no SG `db-client` | Algum consumidor ainda carrega o SG de cliente. Derrube ou desanexe o consumidor primeiro |
 | `InvalidParameterCombination` ao apagar prod | `deletion_protection` ainda está ligado. Rode o `modify-db-instance` acima |
 

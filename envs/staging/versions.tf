@@ -6,11 +6,12 @@ terraform {
     random = { source = "hashicorp/random", version = "~> 3.6" }
   }
 
-  # O bucket precisa existir ANTES do primeiro init (chicken-and-egg do backend).
-  # Criação, uma vez por conta — ver README:
-  #   aws s3api create-bucket --bucket techchallenge-fiap-v1 --region us-east-1
-  #   aws s3api put-bucket-versioning --bucket techchallenge-fiap-v1 \
-  #     --versioning-configuration Status=Enabled
+  # O bucket NÃO está aqui: vem no init, por configuração parcial do backend
+  # (`-backend-config="bucket=..."`, da variável TF_STATE_BUCKET no deploy). Nome
+  # de bucket é global e cada conta do AWS Academy precisa do seu; com o nome
+  # fixo, o init de outra conta falha com AccessDenied num bucket que ela não
+  # pode recriar. O bucket é criado pelo bootstrap da infra Kubernetes e
+  # compartilhado pelos quatro repositórios, cada um com a sua key.
   #
   # A KEY É LITERAL, e é isso que separa os ambientes de verdade. Com
   # `terraform workspace` a key seria calculada e um `workspace select`
@@ -19,7 +20,6 @@ terraform {
   # pode propor destruir o banco" existe para pegar. Com diretório, o ambiente
   # aparece no path, no diff do PR e aqui.
   backend "s3" {
-    bucket       = "techchallenge-fiap-v1"
     key          = "db/staging/terraform.tfstate"
     region       = "us-east-1"
     encrypt      = true

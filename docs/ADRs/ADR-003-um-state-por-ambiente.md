@@ -74,7 +74,7 @@ Adotar a **Opção 3**.
 | | `envs/staging` | `envs/prod` |
 |---|---|---|
 | Key do state | `db/staging/terraform.tfstate` | `db/prod/terraform.tfstate` |
-| Bucket / região / lock | `techchallenge-fiap-v1`, `us-east-1`, `use_lockfile = true` | idem |
+| Bucket / região / lock | `-backend-config="bucket=$TF_STATE_BUCKET"`, `us-east-1`, `use_lockfile = true` | idem |
 | Branches que fazem deploy | `develop` e `homolog` | `main` |
 | Environment do GitHub | `staging` | `production` (com aprovação obrigatória) |
 | Perfil | **Descartável** | **Endurecido** |
@@ -135,9 +135,12 @@ para a `develop` custaria uma instância fora do Free Tier sem provar nada a mai
   depois de um na `develop` pode aplicar uma versão mais antiga do código por cima de uma
   mais nova. O fluxo de promoção (merge commit `develop → homolog`) mantém a diferença
   pequena, mas ela existe.
-* [⚠️] O comentário de `envs/staging/main.tf` e o `.trivyignore` falam em derrubar o
-  staging por **workflow agendado**, que **não existe** neste repositório. Hoje o destroy
-  do staging é manual (ver QUICKSTART) — registrado como dívida consciente.
+* [⚠️] O destroy do staging é **sob demanda** (`destroy.yml`), não agendado: um agendamento
+  rodaria com as credenciais do AWS Academy já expiradas. Esquecer de rodá-lo deixa o
+  staging queimando crédito.
+* [⚠️] O nome do bucket não está no código (configuração parcial do backend). Um
+  `terraform init` sem `-backend-config` pede o bucket interativamente; no CI, o deploy
+  para antes com uma mensagem dizendo para definir `TF_STATE_BUCKET`.
 * [⚠️] A região está literal no `backend` e também em `var.region`. Trocar só a variável
   deixa o state numa região e a infra em outra.
 * [⚠️] O comentário de `envs/prod/main.tf` justifica a retenção de 1 dia pelo Free Tier e,
@@ -153,8 +156,7 @@ para a `develop` custaria uma instância fora do Free Tier sem provar nada a mai
 * [x] Guarda de produção endurecida no CI e guarda de não-destruição no deploy.
 * [ ] Configurar aprovação obrigatória no environment `production` do GitHub, com
       "Prevent self-review" desligado (ADR-000).
-* [ ] Automatizar o destroy do staging fora da janela de avaliação, ou remover a menção ao
-      workflow agendado dos comentários.
+* [x] Destroy do staging sob demanda pelo `destroy.yml`.
 
 ---
 

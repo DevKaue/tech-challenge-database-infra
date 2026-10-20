@@ -22,22 +22,29 @@ graph TB
 
         subgraph DEPLOY["deploy.yml - push em develop, homolog e main (ou manual)"]
             direction TB
-            G["environment do GitHub<br/>staging ou production<br/>production com aprovação"]
-            D1["1. checkout"]
-            D2["2. credenciais AWS<br/>OIDC (AWS_DEPLOY_ROLE)<br/>ou lab do AWS Academy com session token"]
-            D3["3. terraform 1.10.5"]
-            D4["4. terraform init<br/>backend S3 do ambiente"]
-            D5["5. terraform plan -out=tfplan"]
-            D6{"6. o plan destrói<br/>aws_db_instance?"}
-            D7["7. terraform apply tfplan"]
-            D8["8. confere os 7 parâmetros<br/>em /techchallenge/&lt;env&gt;/db/"]
+            subgraph PLAN["job plan - sem environment, secrets do repositório"]
+                direction TB
+                P1["credenciais AWS<br/>OIDC (AWS_DEPLOY_ROLE)<br/>ou lab do AWS Academy com session token"]
+                P2["terraform init<br/>-backend-config bucket=TF_STATE_BUCKET"]
+                P3["terraform plan -out=tfplan"]
+                P4{"o plan destrói<br/>aws_db_instance?"}
+                P5["plano no resumo do run<br/>artifact só com endereços e ações"]
+            end
+            G["gate do environment<br/>staging ou production<br/>production com aprovação"]
+            subgraph APPLY["job apply - no environment"]
+                direction TB
+                A1["terraform init e plan de novo"]
+                A2{"plano igual ao aprovado<br/>e sem destruir o banco?"}
+                A3["terraform apply tfplan"]
+                A4["confere os 7 parâmetros<br/>em /techchallenge/&lt;env&gt;/db/"]
+            end
             X["job falha<br/>nada é aplicado"]
         end
     end
 
     subgraph AWS["AWS"]
         direction TB
-        S3[("S3 techchallenge-fiap-v1<br/>db/staging · db/prod")]
+        S3[("S3 TF_STATE_BUCKET<br/>db/staging · db/prod")]
         RDS[("RDS PostgreSQL 15<br/>techchallenge-&lt;env&gt;")]
         SSM["SSM Parameter Store<br/>contrato de conexão"]
     end
@@ -45,14 +52,16 @@ graph TB
     DEV -->|"PR / push"| CI
     DEV -->|"push develop ou homolog → staging<br/>push main → prod"| DEPLOY
 
-    G --> D1 --> D2 --> D3 --> D4 --> D5 --> D6
-    D6 -->|"não"| D7 --> D8
-    D6 -->|"sim"| X
+    P1 --> P2 --> P3 --> P4
+    P4 -->|"não"| P5 --> G --> A1 --> A2
+    P4 -->|"sim"| X
+    A2 -->|"sim"| A3 --> A4
+    A2 -->|"não"| X
 
-    D4 -.->|"lock e state"| S3
-    D7 -->|"cria / altera"| RDS
-    D7 -->|"publica"| SSM
-    D8 -.->|"get-parameter"| SSM
+    P2 -.->|"lock e state"| S3
+    A3 -->|"cria / altera"| RDS
+    A3 -->|"publica"| SSM
+    A4 -.->|"get-parameter"| SSM
 
     style GitHubActions fill:#fbfbfb,stroke:#999,stroke-dasharray:3
     style AWS fill:#fdf4ec,stroke:#999,stroke-dasharray:3
@@ -61,7 +70,7 @@ graph TB
 
     class DEV gh
     class C1,C2,C3,C4,C5 ci
-    class G,D1,D2,D3,D4,D5,D6,D7,D8 deploy
+    class G,P1,P2,P3,P4,P5,A1,A2,A3,A4 deploy
     class X stop
     class S3,SSM aws
     class RDS data

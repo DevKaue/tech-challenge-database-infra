@@ -39,7 +39,7 @@ a rede (é da infraestrutura Kubernetes) e expor API.
 | Banco | PostgreSQL 15 no Amazon RDS, `db.t4g.micro` | Compatível sem alteração com o Prisma e com as migrations; paridade com o Postgres local; cabe no Free Tier. Ver [RFC-001](docs/RFCs/RFC-001-escolha-do-banco-gerenciado.md) |
 | Módulo RDS | `terraform-aws-modules/rds/aws` **6.13.1** (versão exata) | O `.terraform.lock.hcl` trava provider, não módulo; bump vira PR explícito |
 | Providers | `hashicorp/aws ~> 5.90`, `hashicorp/random ~> 3.6` | `random_password` gera a senha, que nunca passa por `.tfvars` |
-| State | S3 `techchallenge-fiap-v1`, uma key literal por ambiente, `use_lockfile` | Locking nativo, sem DynamoDB; ambiente visível no path. Ver [ADR-003](docs/ADRs/ADR-003-um-state-por-ambiente.md) |
+| State | S3 compartilhado (bucket por `-backend-config`), uma key literal por ambiente, `use_lockfile` | Locking nativo, sem DynamoDB; ambiente visível no path. Ver [ADR-003](docs/ADRs/ADR-003-um-state-por-ambiente.md) |
 | Contrato de conexão | SSM Parameter Store (`String` e `SecureString`) | Path previsível, controle por IAM, custo zero. Ver [ADR-002](docs/ADRs/ADR-002-contrato-via-ssm-parameter-store.md) |
 | Observabilidade | CloudWatch (alarmes, dashboard, logs) + forwarder opcional para Datadog/New Relic | Métricas do RDS sem agente; o forwarder liga com uma variável |
 | Testes | `terraform test` com `mock_provider` | Prova o contrato do SSM, a rede e as validações sem credencial |
@@ -103,10 +103,10 @@ graph TB
         direction TB
         ENVS["envs/staging · envs/prod<br/>backend com key literal"]
         MOD["modules/database<br/>terraform-aws-modules/rds 6.13.1"]
-        WF["deploy.yml<br/>plan · guarda · apply · confere SSM"]
+        WF["deploy.yml<br/>plan · guarda · gate · apply · confere SSM"]
     end
 
-    S3[("S3 techchallenge-fiap-v1<br/>db/&lt;env&gt;/terraform.tfstate<br/>use_lockfile")]
+    S3[("S3 TF_STATE_BUCKET<br/>db/&lt;env&gt;/terraform.tfstate<br/>use_lockfile")]
 
     subgraph AWS["Conta AWS · us-east-1"]
         direction TB
@@ -219,12 +219,13 @@ fazer quando der errado — está no **[QUICKSTART.md](QUICKSTART.md)**. O resum
 
 ### Pré-requisito, uma vez por conta
 
-O bucket do state precisa existir antes do primeiro `init`:
+O bucket do state precisa existir antes do primeiro `init`. Ele é criado pelo bootstrap
+da infraestrutura Kubernetes e compartilhado pelos quatro repositórios, cada um com a sua
+key. O nome não fica no código, porque nome de bucket é global e cada conta do AWS Academy
+tem o seu: ele entra no `init` por configuração parcial do backend.
 
 ```bash
-aws s3api create-bucket --bucket techchallenge-fiap-v1 --region us-east-1
-aws s3api put-bucket-versioning --bucket techchallenge-fiap-v1 \
-  --versioning-configuration Status=Enabled
+export TF_STATE_BUCKET=<nome do bucket do bootstrap>
 ```
 
 ### Local
@@ -232,7 +233,7 @@ aws s3api put-bucket-versioning --bucket techchallenge-fiap-v1 \
 ```bash
 cd envs/staging
 cp example.tfvars terraform.tfvars
-terraform init
+terraform init -backend-config="bucket=$TF_STATE_BUCKET"
 terraform plan
 ```
 
@@ -252,20 +253,30 @@ existe depois do reboot. O pipeline não faz esse passo.
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) roda no push para `develop`
 e `homolog` (staging) e para `main` (prod), e também manualmente:
 
-1. `terraform plan` do ambiente da branch.
+1. Job `plan`, sem environment: `terraform plan` do ambiente da branch, publicado no
+   resumo do run.
 2. Para se o plan destruir ou recriar o `aws_db_instance`: um replace apaga os dados mesmo
    com o apply terminando sem erro.
-3. `terraform apply` do plan salvo.
+3. Job `apply`, no environment `staging` ou `production`: em produção espera a aprovação,
+   planeja de novo e só aplica se o plano for igual ao aprovado. O `tfplan` não passa de
+   um job para o outro porque carrega a senha do banco e o repositório é público.
 4. Confere se todos os parâmetros do contrato estão no SSM.
 
-Configuração por environment do GitHub (`staging` e `production`):
+[`.github/workflows/destroy.yml`](.github/workflows/destroy.yml) derruba o staging sob
+demanda (Actions → Destroy do staging → digite `staging`).
 
-| Nome | Tipo | Para quê |
-|---|---|---|
-| `AWS_DEPLOY_ROLE` | secret | Role do OIDC, fora do AWS Academy |
-| `AWS_LAB_ACCESS_KEY_ID`, `AWS_LAB_SECRET_ACCESS_KEY`, `AWS_LAB_SESSION_TOKEN` | secret | Credenciais temporárias do AWS Academy; recoladas a cada sessão do lab |
-| `LOG_FORWARDER_ARN` | variável | Lambda que encaminha os logs ao Datadog/New Relic; vazio desliga |
-| `ALARM_ACTIONS` | variável | Lista JSON de ARNs de SNS dos alarmes, ex.: `["arn:aws:sns:..."]` |
+| Nome | Onde | Tipo | Para quê |
+|---|---|---|---|
+| `AWS_DEPLOY_ROLE` | repositório | secret | Role do OIDC, fora do AWS Academy |
+| `AWS_LAB_ACCESS_KEY_ID`, `AWS_LAB_SECRET_ACCESS_KEY`, `AWS_LAB_SESSION_TOKEN` | repositório | secret | Credenciais temporárias do AWS Academy; recoladas a cada sessão do lab |
+| `TF_STATE_BUCKET` | repositório | variável | Bucket do state, criado pelo bootstrap da infra Kubernetes e compartilhado pelos quatro repositórios |
+| `LOG_FORWARDER_ARN` | repositório | variável | Lambda que encaminha os logs ao Datadog/New Relic; vazio desliga |
+| `ALARM_ACTIONS` | repositório | variável | Lista JSON de ARNs de SNS dos alarmes, ex.: `["arn:aws:sns:..."]` |
+
+Tudo fica no nível do **repositório** (Settings → Secrets and variables → Actions), não do
+environment: o job de `plan` roda sem environment para o plano sair antes do gate, e só
+enxerga o que é do repositório. Os environments `staging` e `production` existem para o
+gate do `apply`.
 
 Use OIDC **ou** as credenciais do lab, nunca os dois. O environment `production` deve ter
 aprovação obrigatória, para o push na `main` parar antes do apply.
@@ -289,8 +300,8 @@ nasce vazio e as tabelas aparecem no `prisma migrate deploy`.
   no mecânico.
 - **Ajuste do modelo na Fase 3:** coluna `customers.status`, enum `CustomerStatus`
   (`ACTIVE`, `INACTIVE`, `BLOCKED`), `NOT NULL DEFAULT 'ACTIVE'`, lida pela Lambda junto
-  com `deleted_at`. **A migration é do repositório da aplicação e ainda está pendente no
-  `develop` de lá.**
+  com `deleted_at`. A migration é do repositório da aplicação e está no `develop` de lá
+  desde 13/10/2026.
 
 Visão resumida — o diagrama completo, com todas as colunas, está em
 [docs/modelagem-de-dados.md](docs/modelagem-de-dados.md):
@@ -311,7 +322,7 @@ erDiagram
         text id PK
         text document UK "UNIQUE (document, document_type)"
         enum document_type UK "CPF | CNPJ | PASSPORT | RNE"
-        enum status "AJUSTE FASE 3 - migration pendente no app"
+        enum status "AJUSTE FASE 3"
         timestamp deleted_at "soft delete"
     }
 ```
@@ -399,8 +410,7 @@ inaceitável** — quando o critério for atingido, a dívida vira trabalho.
 | **Storage fixo em 20 GB e sem alarme de espaço livre** | Melhor falhar previsível em 20 GB do que no meio de uma escrita; o Free Tier cobre 20 GB | `FreeStorageSpace` no dashboard cair abaixo de 25% — aumentar por PR e criar o alarme |
 | **Alarmes sem notificação por padrão** (`alarm_actions = []`) | O repositório aplica sem exigir um tópico SNS | Houver alguém de plantão: sem destino, alarme disparado não chega a ninguém |
 | **Reboot manual** para o `pg_stat_statements` | O Terraform não reinicia a instância; é uma vez por instância | A instância for recriada com frequência (o passo seria esquecido) |
-| **Destroy do staging é manual** | Os comentários de `envs/staging/main.tf` e do `.trivyignore` citam um workflow agendado que **não existe** neste repositório | Staging ficar de pé fora da janela de avaliação uma única vez |
-| **`customers.status` pendente** no repositório da aplicação | A migration (`20261009230000_add_status_to_customers`) foi escrita, mas o PR foi fechado sem merge | Já é inaceitável para a entrega: sem ela, a Lambda responde 503 para qualquer CPF. Dono: repositório da aplicação |
+| **Destroy do staging sob demanda, não agendado** (`destroy.yml`) | Agendar exigiria credenciais válidas no horário, e as do AWS Academy expiram com a sessão | Staging ficar de pé fora da janela de avaliação uma única vez |
 
 ## Documentação
 
