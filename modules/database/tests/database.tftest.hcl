@@ -31,7 +31,7 @@ override_data {
 override_data {
   target = data.aws_ssm_parameter.eks_node_sg_id
   values = {
-    value = "sg-0eks1111node2222a"
+    insecure_value = "sg-0eks1111node2222a"
   }
 }
 

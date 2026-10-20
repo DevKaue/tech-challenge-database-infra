@@ -70,7 +70,7 @@ data "aws_ssm_parameter" "eks_node_sg_id" {
 
 resource "aws_vpc_security_group_ingress_rule" "rds_from_eks_nodes" {
   security_group_id            = aws_security_group.rds.id
-  referenced_security_group_id = nonsensitive(data.aws_ssm_parameter.eks_node_sg_id.value)
+  referenced_security_group_id = data.aws_ssm_parameter.eks_node_sg_id.insecure_value
   from_port                    = 5432
   to_port                      = 5432
   ip_protocol                  = "tcp"
