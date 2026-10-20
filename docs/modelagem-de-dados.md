@@ -70,7 +70,7 @@ erDiagram
         text name
         text email "opcional"
         text phone "opcional"
-        enum status "AJUSTE FASE 3: ACTIVE | INACTIVE | BLOCKED, NOT NULL DEFAULT ACTIVE - migration pendente no app"
+        enum status "AJUSTE FASE 3: ACTIVE | INACTIVE | BLOCKED, NOT NULL DEFAULT ACTIVE"
         timestamp created_at
         timestamp updated_at
         timestamp deleted_at "soft delete"
@@ -408,25 +408,18 @@ E considera o cliente **elegível** só quando `deleted_at IS NULL` **e**
 novo no banco que a Lambda não conheça é tratado como drift e vira **503**, nunca token
 emitido.
 
-### Situação: migration pendente no repositório da aplicação
+### Situação: migration no `develop` da aplicação
 
-> **A migration deste ajuste ainda não está no `develop` da aplicação.** Ela foi escrita
-> (`20261009230000_add_status_to_customers`, com a mudança correspondente no
-> `schema.prisma`) em um PR que foi fechado sem merge, e o `schema.prisma` do `develop`
-> **não tem** a coluna `status`.
+A migration `20261009230000_add_status_to_customers` (com a mudança correspondente no
+`schema.prisma`) está no `develop` do repositório da aplicação desde 13/10/2026. Ela é
+aditiva: cria o enum e a coluna com `DEFAULT 'ACTIVE'`, então os clientes que já existem
+continuam elegíveis.
 
 O dono do ajuste é o repositório da aplicação, porque é lá que vivem as migrations do
 Prisma; este repositório não cria tabela nem coluna (ver [Quem é dono de quê](#quem-é-dono-de-quê)).
-Enquanto a migration não entrar no `develop` e não for aplicada pelo `prisma migrate
-deploy`:
-
-- a consulta da Lambda falha com `column "status" does not exist`, que ela trata como
-  indisponibilidade da base e responde **503** para qualquer CPF;
-- o diagrama ER acima mostra a coluna porque ele descreve o modelo **exigido** pela Fase 3,
-  e a marca como pendente.
-
-Esse item está nas [dívidas conscientes do README](../README.md#dívidas-conscientes),
-com o critério que o torna inaceitável.
+Num ambiente em que o `prisma migrate deploy` ainda não rodou, a consulta da Lambda falha
+com `column "status" does not exist`, que ela trata como indisponibilidade da base e
+responde **503** para qualquer CPF.
 
 ---
 
