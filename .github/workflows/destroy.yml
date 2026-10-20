@@ -58,5 +58,17 @@ jobs:
       - name: Terraform init
         run: terraform init -input=false -backend-config="bucket=$TF_STATE_BUCKET"
 
+      # O run fica como registro do que foi derrubado. `terraform show` mascara
+      # os valores sensíveis, então a senha não vai para o resumo.
+      - name: Plan do destroy no resumo do run
+        run: |
+          terraform plan -destroy -input=false -no-color -out=tfdestroy
+          {
+            echo '## Destroy de `staging`'
+            echo '```'
+            terraform show -no-color tfdestroy
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Terraform destroy
-        run: terraform destroy -input=false -auto-approve
+        run: terraform apply -input=false tfdestroy
