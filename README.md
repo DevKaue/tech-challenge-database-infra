@@ -79,9 +79,10 @@ Três decisões de integração sustentam a separação entre repositórios:
 - **A rede é descoberta por tag**, não por remote state: VPC por `Project`, `Environment`
   e `ManagedBy`; subnets privadas por `kubernetes.io/role/internal-elb = 1`. Um bloco
   `check` diz, em português, que a infraestrutura Kubernetes precisa ser aplicada antes.
-- **O acesso de rede é por SG de cliente**: o SG do RDS só aceita 5432/tcp de quem carrega
-  o SG `techchallenge-<env>-db-client`, que este repositório publica para ser anexado aos
-  nós do EKS e à Lambda. Nenhum lado precisa conhecer o SG do outro.
+- **O acesso de rede é por security group de origem**, nunca por CIDR. O SG do RDS aceita
+  5432/tcp de dois lugares: do SG `techchallenge-<env>-db-client`, que este repositório
+  publica para a Lambda anexar, e do SG dos nós do EKS, que a infraestrutura Kubernetes
+  publica em `/techchallenge/<env>/eks/node-sg-id`.
 - **O contrato sai pelo SSM**, num prefixo previsível, e é conferido por teste, por CI e
   depois de cada deploy.
 
@@ -137,7 +138,7 @@ graph TB
     MOD --> CW
     PG -.->|"aplicado em"| RDS
     SGR -.->|"protege"| RDS
-    NODES -.->|"anexa"| SGC
+    NODES -->|"SG dos nós, TLS 5432"| RDS
     LAMBDA -.->|"anexa"| SGC
     SGC -->|"TLS 5432"| RDS
     NODES -.->|"deploy lê o contrato"| SSM
@@ -400,7 +401,6 @@ inaceitável** — quando o critério for atingido, a dívida vira trabalho.
 | **Reboot manual** para o `pg_stat_statements` | O Terraform não reinicia a instância; é uma vez por instância | A instância for recriada com frequência (o passo seria esquecido) |
 | **Destroy do staging é manual** | Os comentários de `envs/staging/main.tf` e do `.trivyignore` citam um workflow agendado que **não existe** neste repositório | Staging ficar de pé fora da janela de avaliação uma única vez |
 | **`customers.status` pendente** no repositório da aplicação | A migration (`20261009230000_add_status_to_customers`) foi escrita, mas o PR foi fechado sem merge | Já é inaceitável para a entrega: sem ela, a Lambda responde 503 para qualquer CPF. Dono: repositório da aplicação |
-| **Consumidores ainda não leem o contrato do SSM** | O desenho foi fechado depois de a aplicação (Secrets Manager) e a infra Kubernetes (`terraform_remote_state`, output `db_password`) serem escritas | Já é inaceitável para a entrega integrada: sem o alinhamento, a aplicação não encontra o banco. Ver [ADR-002](docs/ADRs/ADR-002-contrato-via-ssm-parameter-store.md) |
 
 ## Documentação
 

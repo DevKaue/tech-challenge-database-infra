@@ -94,10 +94,16 @@ Adotar a **Opção 3**.
 - Um bloco `check` exige pelo menos duas subnets e, se não achar, diz que a infra
   Kubernetes precisa ser aplicada primeiro — em vez do erro opaco do subnet group.
 
-**Autorização de rede** (`security-groups.tf`): o SG do RDS só aceita 5432/tcp vindo do
-SG `techchallenge-<env>-db-client`, que este repositório cria e publica para ser
-**anexado** aos nós do EKS e à Lambda. O SG de cliente tem egress explícito 5432 para o
-SG do RDS, porque a Lambda não sai sem regra.
+**Autorização de rede** (`security-groups.tf`): o SG do RDS só aceita 5432/tcp de dois
+security groups de origem:
+
+- o SG `techchallenge-<env>-db-client`, que este repositório cria e publica para ser
+  **anexado** à Lambda. Ele tem egress explícito 5432 para o SG do RDS, porque a Lambda
+  não sai sem regra;
+- o SG dos nós do EKS, que a infraestrutura Kubernetes publica em
+  `/techchallenge/<env>/eks/node-sg-id`. Os pods usam IPs da ENI do nó e herdam o SG dele.
+  A infra Kubernetes preferiu publicar o próprio SG a anexar o de cliente, porque o
+  cluster é aplicado antes do banco e não conhece nada daqui.
 
 **Contrato publicado** (`discovery.tf`, `secrets.tf`), todos com o prefixo
 `/techchallenge/<env>/db`:
@@ -154,19 +160,12 @@ obrigaria a dar `kms:Decrypt` a quem só precisa descobrir o banco.
   no data source, com `no matching EC2 VPC found`.
 * [⚠️] Sem rotação de senha. O `ignore_changes` evita trocar a senha por acidente, mas
   também significa que trocá-la é uma operação manual.
-* [⚠️] **Divergência atual com os consumidores.** Na data deste ADR, os outros dois
-  repositórios ainda não leem este contrato:
-  * o `deploy.yml` do `develop` da aplicação monta o `DATABASE_URL` lendo o **Secrets
-    Manager** (`aws secretsmanager get-secret-value --secret-id ${{ secrets.DB_SECRET_ID }}`,
-    com as chaves JSON `host`, `port`, `dbname`, `username` e `password`), que este
-    repositório **não** cria;
-  * o `develop` do repositório de infraestrutura Kubernetes lê o state deste repositório
-    por `terraform_remote_state` (key `db/prod/terraform.tfstate`) e espera um output
-    `db_password`, que este repositório **não** exporta — e a ordem de apply que aquele
-    código pressupõe (banco primeiro) é a inversa da daqui (rede primeiro).
-
-  Enquanto esses dois pontos não forem alinhados, o banco sobe e publica o contrato, mas a
-  aplicação não o encontra.
+* [⚠️] **Divergência com a aplicação.** A infraestrutura Kubernetes já foi alinhada (em
+  20/10/2026 ela passou a publicar o SG dos nós e a dar à policy de deploy da aplicação a
+  leitura de `/techchallenge/<env>/db/*`, sem `terraform_remote_state` do banco). Falta o
+  `deploy.yml` da aplicação, que ainda monta o `DATABASE_URL` lendo o **Secrets Manager**
+  (`secrets.DB_SECRET_ID`), que este repositório **não** cria. Até essa troca, o banco sobe
+  e publica o contrato, mas o deploy da aplicação não o encontra.
 
 ---
 
@@ -175,11 +174,11 @@ obrigaria a dar `kms:Decrypt` a quem só precisa descobrir o banco.
 * [x] Descoberta de VPC e subnets por tag, com o filtro de ambiente e o bloco `check`.
 * [x] SG de cliente publicado em `client-sg-id`.
 * [x] Os sete parâmetros publicados e cobertos por teste, CI e conferência pós-deploy.
-* [ ] Repositório da aplicação: trocar a leitura do Secrets Manager por
-      `aws ssm get-parameter --with-decryption --name /techchallenge/<env>/db/password` e
-      os demais paths do prefixo.
-* [ ] Repositório de infraestrutura Kubernetes: remover o `terraform_remote_state` do
-      banco e anexar o `client-sg-id` aos nós do EKS.
+* [x] Ingress do RDS a partir do SG dos nós do EKS, lido de `/techchallenge/<env>/eks/node-sg-id`.
+* [x] Infraestrutura Kubernetes: publica o SG dos nós no SSM e dá à policy de deploy da
+      aplicação a leitura de `/techchallenge/<env>/db/*` (commit `d356f0b` na `develop`).
+* [ ] Repositório da aplicação: trocar a leitura do Secrets Manager no `deploy.yml` por
+      `aws ssm get-parameter --with-decryption` nos paths do prefixo.
 * [ ] Repositório da Lambda: anexar o `client-sg-id` à função e ler o prefixo em
       `DB_SSM_PREFIX`.
 
