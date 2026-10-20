@@ -68,7 +68,7 @@ graph TD
     GHA["<b>GitHub Actions</b><br/><i>[Software System]</i><br/>deploy.yml do ambiente da branch"]:::extSystem
     S3[("<b>Bucket de state</b><br/><i>[Software System: S3]</i><br/>db/staging e db/prod, use_lockfile")]:::extSystem
     VPC["<b>VPC do ambiente</b><br/><i>[Software System]</i><br/>Criada pela infra Kubernetes; tags Project, Environment, ManagedBy"]:::extSystem
-    APP["<b>API Oficina no EKS</b><br/><i>[Software System]</i><br/>NestJS + Prisma; nós carregam o SG de cliente"]:::extSystem
+    APP["<b>API Oficina no EKS</b><br/><i>[Software System]</i><br/>NestJS + Prisma; entra pelo SG dos nós"]:::extSystem
     FN["<b>Lambda techchallenge-auth-env</b><br/><i>[Software System]</i><br/>Node.js + pg; carrega o SG de cliente"]:::extSystem
     OBS["<b>Datadog / New Relic</b><br/><i>[Software System]</i><br/>Forwarder de logs, opcional"]:::extSystem
 
@@ -77,7 +77,7 @@ graph TD
         direction TB
         DB[("<b>PostgreSQL 15</b><br/><i>[Container: Amazon RDS]</i><br/>db.t4g.micro, single-AZ, 20 GB cifrado, subnets privadas<br/>Armazena clientes, veículos, OS, orçamentos e usuários")]:::database
         PG["<b>Parameter group</b><br/><i>[Container: RDS parameter group]</i><br/>rds.force_ssl, log de queries acima de 1 s, pg_stat_statements"]:::container
-        SG["<b>Security groups</b><br/><i>[Container: EC2 security group]</i><br/>SG do RDS aceita 5432 só do SG de cliente publicado"]:::container
+        SG["<b>Security groups</b><br/><i>[Container: EC2 security group]</i><br/>SG do RDS aceita 5432 do SG de cliente e do SG dos nós"]:::container
         SSM["<b>Contrato de conexão</b><br/><i>[Container: SSM Parameter Store]</i><br/>/techchallenge/env/db/: endpoint, host, port, name, username, password, client-sg-id"]:::container
         CW["<b>Observabilidade</b><br/><i>[Container: CloudWatch]</i><br/>4 alarmes, dashboard, log groups postgresql e upgrade"]:::container
     end
@@ -128,7 +128,7 @@ graph TD
         MAIN["<b>main.tf</b><br/><i>[Component: locals]</i><br/>Nome, tags e prefixo do SSM"]:::sharedKernel
         VAR["<b>variables.tf</b><br/><i>[Component: entradas]</i><br/>Validações de ambiente, storage e retenção"]:::sharedKernel
         NET["<b>network.tf</b><br/><i>[Component: descoberta]</i><br/>VPC e subnets por tag + bloco check"]:::component
-        SGS["<b>security-groups.tf</b><br/><i>[Component: rede]</i><br/>SG do RDS e SG de cliente"]:::component
+        SGS["<b>security-groups.tf</b><br/><i>[Component: rede]</i><br/>SG do RDS, SG de cliente e ingress do SG dos nós"]:::component
         PGR["<b>parameter-group.tf</b><br/><i>[Component: parâmetros]</i><br/>force_ssl, log 1 s, pg_stat_statements"]:::component
         RDS["<b>rds.tf</b><br/><i>[Component: instância]</i><br/>random_password + módulo RDS"]:::component
         SEC["<b>secrets.tf</b><br/><i>[Component: segredo]</i><br/>Senha em SSM SecureString"]:::component

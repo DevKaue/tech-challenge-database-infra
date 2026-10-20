@@ -116,7 +116,7 @@ graph TB
             subgraph PRIV["Subnets privadas · kubernetes.io/role/internal-elb = 1"]
                 RDS[("RDS PostgreSQL 15<br/>techchallenge-&lt;env&gt;<br/>db.t4g.micro · single-AZ<br/>20 GB cifrado · sem IP público")]
             end
-            SGR["SG techchallenge-&lt;env&gt;-rds<br/>ingress 5432 só do SG de cliente"]
+            SGR["SG techchallenge-&lt;env&gt;-rds<br/>ingress 5432 só do SG de cliente<br/>e do SG dos nós do EKS"]
             SGC["SG techchallenge-&lt;env&gt;-db-client<br/>egress 5432 para o SG do RDS"]
             NODES["Nós do EKS<br/>aplicação"]
             LAMBDA["Lambda techchallenge-auth-&lt;env&gt;"]

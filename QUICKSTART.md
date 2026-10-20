@@ -191,8 +191,9 @@ para antes do apply e espera a aprovação.
 
 ### Staging — ao fim de cada janela de avaliação
 
-A ordem é a inversa da criação: **consumidores → banco → rede**. Enquanto a Lambda ou os
-nós do EKS carregarem o SG de cliente, a AWS recusa apagá-lo e o destroy para no meio.
+A ordem é a inversa da criação: **consumidores → banco → rede**. Enquanto a Lambda carregar o SG de
+cliente, a AWS recusa apagá-lo e o destroy para no meio. Os nós do EKS entram por uma
+regra que referencia o SG deles, e essa regra sai junto com o banco.
 
 ```bash
 cd envs/staging

@@ -64,7 +64,7 @@ Além do requisito formal, há restrições concretas que qualquer opção preci
 | Classe | `db.t4g.micro` (2 vCPU burstable, 1 GiB, Graviton) | `var.db_instance_class` |
 | Disponibilidade | **Single-AZ** (`multi_az = false`) | `rds.tf` |
 | Armazenamento | 20 GB, cifrado (`storage_encrypted = true`), sem autoscaling (`max_allocated_storage = 0`) | `rds.tf`, `variables.tf` |
-| Rede | Subnets privadas, `publicly_accessible = false`, ingress 5432 só a partir do SG de cliente | `network.tf`, `security-groups.tf` |
+| Rede | Subnets privadas, `publicly_accessible = false`, ingress 5432 só a partir do SG de cliente (Lambda) e do SG dos nós do EKS (`/techchallenge/<env>/eks/node-sg-id`) | `network.tf`, `security-groups.tf` |
 | TLS | `rds.force_ssl = 1` explícito no parameter group | `parameter-group.tf` |
 | Diagnóstico | `log_min_duration_statement = 1000`, `pg_stat_statements`, logs exportados ao CloudWatch | `parameter-group.tf`, `rds.tf` |
 | Credencial | Usuário master com senha gerada por `random_password`, publicada em SSM SecureString | `rds.tf`, `secrets.tf` |

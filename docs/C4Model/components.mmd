@@ -22,7 +22,7 @@ graph TD
         MAIN["<b>main.tf</b><br/><i>[Component: locals]</i><br/>Nome, tags e prefixo do SSM"]:::sharedKernel
         VAR["<b>variables.tf</b><br/><i>[Component: entradas]</i><br/>Validações de ambiente, storage e retenção"]:::sharedKernel
         NET["<b>network.tf</b><br/><i>[Component: descoberta]</i><br/>VPC e subnets por tag + bloco check"]:::component
-        SGS["<b>security-groups.tf</b><br/><i>[Component: rede]</i><br/>SG do RDS e SG de cliente"]:::component
+        SGS["<b>security-groups.tf</b><br/><i>[Component: rede]</i><br/>SG do RDS, SG de cliente e ingress do SG dos nós"]:::component
         PGR["<b>parameter-group.tf</b><br/><i>[Component: parâmetros]</i><br/>force_ssl, log 1 s, pg_stat_statements"]:::component
         RDS["<b>rds.tf</b><br/><i>[Component: instância]</i><br/>random_password + módulo RDS"]:::component
         SEC["<b>secrets.tf</b><br/><i>[Component: segredo]</i><br/>Senha em SSM SecureString"]:::component
