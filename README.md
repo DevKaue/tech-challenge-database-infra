@@ -69,7 +69,7 @@ Um módulo, dois ambientes. `modules/database` contém toda a lógica; `envs/sta
 
 | | staging | prod |
 |---|---|---|
-| Branches | `develop` e `homolog` | `main` |
+| Branch que faz deploy | `develop` | `main` |
 | Perfil | Descartável: `deletion_protection = false`, `skip_final_snapshot = true`, retenção 0 | Endurecido: `deletion_protection = true`, snapshot final, retenção 1 dia |
 | Instância | `techchallenge-staging`, `db.t4g.micro` | `techchallenge-prod`, `db.t4g.micro` |
 | Contrato | `/techchallenge/staging/db/` | `/techchallenge/prod/db/` |
@@ -182,7 +182,7 @@ Contexto, Container e Componentes, com visualização direta no GitHub:
 │   ├── outputs.tf             # CONTRATO — conferido pelo CI
 │   └── tests/                 # terraform test com provider mockado
 ├── envs/
-│   ├── staging/               # develop e homolog — perfil descartável
+│   ├── staging/               # develop — perfil descartável
 │   └── prod/                  # main — perfil endurecido
 ├── docs/
 │   ├── ADRs/                  # decisões registradas
@@ -206,7 +206,6 @@ fazer quando der errado — está no **[QUICKSTART.md](QUICKSTART.md)**. O resum
 | Branch | Ambiente | Diretório | State |
 |---|---|---|---|
 | `develop` | staging | `envs/staging` | `db/staging/terraform.tfstate` |
-| `homolog` | staging | `envs/staging` | `db/staging/terraform.tfstate` |
 | `main` | prod | `envs/prod` | `db/prod/terraform.tfstate` |
 
 ### Ordem entre os repositórios
@@ -251,7 +250,8 @@ existe depois do reboot. O pipeline não faz esse passo.
 ### Deploy
 
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) roda no push para `develop`
-e `homolog` (staging) e para `main` (prod), e também manualmente:
+(staging) e para `main` (prod), e também manualmente. A `homolog` não faz deploy, como
+nos outros três repositórios:
 
 1. Job `plan`, sem environment: `terraform plan` do ambiente da branch, publicado no
    resumo do run.

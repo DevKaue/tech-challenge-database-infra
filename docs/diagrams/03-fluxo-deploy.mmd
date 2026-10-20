@@ -20,7 +20,7 @@ graph TB
             C5["contrato<br/>9 outputs nos dois ambientes<br/>sem endpoint literal, sem chave estática<br/>chave do lab só com session token<br/>prod endurecida, .trivyignore justificado"]
         end
 
-        subgraph DEPLOY["deploy.yml - push em develop, homolog e main (ou manual)"]
+        subgraph DEPLOY["deploy.yml - push em develop e main (ou manual)"]
             direction TB
             subgraph PLAN["job plan - sem environment, secrets do repositório"]
                 direction TB
@@ -50,7 +50,7 @@ graph TB
     end
 
     DEV -->|"PR / push"| CI
-    DEV -->|"push develop ou homolog → staging<br/>push main → prod"| DEPLOY
+    DEV -->|"push develop → staging<br/>push main → prod"| DEPLOY
 
     P1 --> P2 --> P3 --> P4
     P4 -->|"não"| P5 --> G --> A1 --> A2

@@ -75,7 +75,7 @@ Adotar a **Opção 3**.
 |---|---|---|
 | Key do state | `db/staging/terraform.tfstate` | `db/prod/terraform.tfstate` |
 | Bucket / região / lock | `-backend-config="bucket=$TF_STATE_BUCKET"`, `us-east-1`, `use_lockfile = true` | idem |
-| Branches que fazem deploy | `develop` e `homolog` | `main` |
+| Branch que faz deploy | `develop` | `main` |
 | Environment do GitHub | `staging` | `production` (com aprovação obrigatória) |
 | Perfil | **Descartável** | **Endurecido** |
 | `deletion_protection` | `false` | `true` |
@@ -112,9 +112,11 @@ declaração de provider, variáveis e outputs. Os outputs repetidos inclusive t
 própria no CI (o job `contrato` confere os nove nos dois ambientes). A lógica fica no
 módulo, uma vez só.
 
-`develop` e `homolog` aplicarem o mesmo staging é consequência de haver só dois ambientes
-de banco para três branches: o desafio pede homologação e produção, e um terceiro banco
-para a `develop` custaria uma instância fora do Free Tier sem provar nada a mais.
+Há só dois ambientes de banco para três branches: o desafio pede homologação e produção, e
+um terceiro banco custaria uma instância fora do Free Tier sem provar nada a mais. Só a
+`develop` aplica o staging; a `homolog` fica de fora dos gatilhos, no mesmo modelo da infra
+Kubernetes, do app e da Lambda. Com as duas, cada promoção aplicaria o staging duas vezes,
+às vezes com commits diferentes.
 
 ---
 
@@ -125,16 +127,13 @@ para a `develop` custaria uma instância fora do Free Tier sem provar nada a mai
 * [✔️] O ambiente de cada mudança é visível no path do arquivo alterado.
 * [✔️] Staging pode ser destruído sem intervenção; produção não pode ser destruída nem
   pela API.
-* [✔️] Os dois deploys de staging (`develop` e `homolog`) entram no mesmo grupo de
-  concorrência (`deploy-staging`) e nunca aplicam ao mesmo tempo; o lock do state cobre o
-  que sobrar.
+* [✔️] Uma branch por ambiente: o staging reflete sempre a `develop`, e o grupo de
+  concorrência (`deploy-staging`) com o lock do state impede dois applies ao mesmo tempo.
 
 ### Negativas / Riscos
 
-* [⚠️] Staging reflete o **último** push entre `develop` e `homolog`. Um push na `homolog`
-  depois de um na `develop` pode aplicar uma versão mais antiga do código por cima de uma
-  mais nova. O fluxo de promoção (merge commit `develop → homolog`) mantém a diferença
-  pequena, mas ela existe.
+* [⚠️] A `homolog` não tem ambiente próprio: o que passa por ela já foi aplicado no staging
+  pela `develop`, e o próximo apply real é o de produção.
 * [⚠️] O destroy do staging é **sob demanda** (`destroy.yml`), não agendado: um agendamento
   rodaria com as credenciais do AWS Academy já expiradas. Esquecer de rodá-lo deixa o
   staging queimando crédito.

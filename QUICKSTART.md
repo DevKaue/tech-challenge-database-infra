@@ -174,7 +174,7 @@ sozinho, no push:
 
 | Branch | Ambiente | Environment do GitHub |
 |---|---|---|
-| `develop`, `homolog` | staging | `staging` |
+| `develop` | staging | `staging` |
 | `main` | prod | `production` |
 
 O job `plan` publica o plano no resumo do run; o job `apply` espera a aprovação do

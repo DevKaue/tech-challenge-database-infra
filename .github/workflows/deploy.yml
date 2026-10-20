@@ -1,6 +1,9 @@
 name: Deploy
 
-# develop e homolog aplicam envs/staging; main aplica envs/prod.
+# develop aplica envs/staging; main aplica envs/prod. A homolog não faz deploy:
+# é o mesmo modelo da infra Kubernetes, do app e da Lambda, e com ela nos
+# gatilhos cada promoção aplicaria o staging duas vezes, às vezes com commits
+# diferentes.
 #
 # Dois jobs, para quem aprova produção ver o plan ANTES de aprovar: o `plan`
 # roda sem environment e publica o plano no resumo do run; o `apply` usa o
@@ -8,7 +11,7 @@ name: Deploy
 # antes de ele começar.
 on:
   push:
-    branches: [develop, homolog, main]
+    branches: [develop, main]
   workflow_dispatch:
 
 # Um apply por ambiente de cada vez, sem cancelar o que está rodando: matar um
