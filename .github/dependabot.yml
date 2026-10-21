@@ -6,7 +6,7 @@ updates:
   - package-ecosystem: terraform
     directories:
       - /modules/database
-      - /envs/homolog
+      - /envs/staging
       - /envs/prod
     schedule:
       interval: weekly

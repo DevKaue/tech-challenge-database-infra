@@ -1,0 +1,9 @@
+output "db_endpoint" { value = module.database.db_endpoint }
+output "db_host" { value = module.database.db_host }
+output "db_port" { value = module.database.db_port }
+output "db_name" { value = module.database.db_name }
+output "db_username" { value = module.database.db_username }
+output "db_security_group_id" { value = module.database.db_security_group_id }
+output "db_client_security_group_id" { value = module.database.db_client_security_group_id }
+output "db_password_ssm_path" { value = module.database.db_password_ssm_path }
+output "ssm_prefix" { value = module.database.ssm_prefix }
