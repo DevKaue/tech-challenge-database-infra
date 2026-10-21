@@ -177,6 +177,9 @@ sozinho, no push:
 | `develop` | staging | `staging` |
 | `main` | prod | `production` |
 
+O staging só roda com a variável `STAGING_ENABLED=true` no repositório. Sem ela o
+push na `develop` é pulado, porque o staging da infra Kubernetes fica desligado.
+
 O job `plan` publica o plano no resumo do run; o job `apply` espera a aprovação do
 environment, planeja de novo e só aplica se o plano for igual ao aprovado.
 

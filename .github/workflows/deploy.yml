@@ -34,6 +34,11 @@ env:
 jobs:
   plan:
     name: Plan
+    # O staging da infra fica desligado para economizar crédito do Academy; sem a
+    # VPC e o node-sg-id dele, o push na develop só geraria run vermelho. Mesmo
+    # gate da infra Kubernetes: crie STAGING_ENABLED=true quando subir o staging.
+    # O apply depende do plan e é pulado junto.
+    if: github.ref == 'refs/heads/main' || vars.STAGING_ENABLED == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
