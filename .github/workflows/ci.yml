@@ -62,7 +62,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        env: [homolog, prod]
+        env: [staging, prod]
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -83,6 +83,27 @@ jobs:
       - name: Validate
         working-directory: envs/${{ matrix.env }}
         run: terraform validate
+
+  testes:
+    name: Testes do módulo (terraform test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: '1.10.5'
+          terraform_wrapper: false
+
+      # Provider mockado e `command = plan`: roda sem credencial e não cria nada.
+      # É o que prova o contrato de paths do SSM que a Lambda e o cluster leem.
+      - name: Init
+        working-directory: modules/database
+        run: terraform init -backend=false
+
+      - name: Test
+        working-directory: modules/database
+        run: terraform test
 
   seguranca:
     name: Scan de misconfiguração
@@ -116,7 +137,7 @@ jobs:
       - name: Outputs obrigatórios presentes nos dois ambientes
         run: |
           faltando=0
-          for env in homolog prod; do
+          for env in staging prod; do
             for out in db_endpoint db_host db_port db_name db_username \
                        db_security_group_id db_client_security_group_id \
                        db_password_ssm_path ssm_prefix; do
@@ -143,9 +164,20 @@ jobs:
           # falhar contra o próprio texto dele — que é exatamente o que
           # aconteceu na primeira versão.
           if grep -rInE 'secrets\.AWS_(ACCESS_KEY_ID|SECRET_ACCESS_KEY)|AWS_(ACCESS_KEY_ID|SECRET_ACCESS_KEY)[[:space:]]*:' .github/ ; then
-            echo "::error::credencial estática encontrada — o acesso à AWS é por OIDC"
+            echo "::error::credencial estática encontrada — o acesso à AWS é por OIDC ou pelas credenciais temporárias do lab"
             exit 1
           fi
+
+      - name: Chave do AWS Academy só com session token
+        run: |
+          # O AWS Academy não permite criar a role do OIDC, e o deploy aceita as
+          # credenciais do lab como alternativa. Elas só são aceitáveis porque são
+          # TEMPORÁRIAS: sem session token, uma chave ali seria de usuário IAM,
+          # válida para sempre.
+          for f in $(grep -rlE '^[[:space:]]*aws-access-key-id:' .github/workflows/ || true); do
+            grep -qE 'aws-session-token:[[:space:]]*\$\{\{ *secrets\.AWS_LAB_SESSION_TOKEN' "$f" || {
+              echo "::error file=$f::aws-access-key-id sem aws-session-token do lab"; exit 1; }
+          done
 
       - name: Produção precisa estar endurecida
         run: |

@@ -7,7 +7,7 @@ provider "aws" {
   default_tags {
     tags = {
       Project     = var.project
-      Environment = "homolog"
+      Environment = "staging"
       ManagedBy   = "terraform"
     }
   }

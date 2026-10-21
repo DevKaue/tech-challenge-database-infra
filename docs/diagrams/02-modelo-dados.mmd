@@ -1,0 +1,116 @@
+erDiagram
+    customers ||--o{ vehicles : "possui"
+    customers ||--o{ service_orders : "abre"
+    vehicles ||--o{ service_orders : "recebe"
+    users |o--o{ service_orders : "mecanico responsavel"
+    service_orders ||--o{ service_order_status_history : "historiza"
+    service_orders ||--o{ estimates : "tem"
+    estimates ||--o{ estimate_items : "composto por"
+    estimate_items }o..o| service_catalog : "reference_id quando SERVICE"
+    estimate_items }o..o| parts : "reference_id quando PART"
+
+    customers {
+        text id PK "uuid gerado pelo Prisma"
+        text document UK "UNIQUE (document, document_type)"
+        enum document_type UK "CPF | CNPJ | PASSPORT | RNE"
+        text name
+        text email "opcional"
+        text phone "opcional"
+        enum status "AJUSTE FASE 3: ACTIVE | INACTIVE | BLOCKED, NOT NULL DEFAULT ACTIVE"
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at "soft delete"
+    }
+
+    vehicles {
+        text id PK
+        text plate UK "UNIQUE parcial WHERE deleted_at IS NULL"
+        text brand
+        text model
+        int year
+        text customer_id FK "ON DELETE RESTRICT"
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at "soft delete"
+    }
+
+    users {
+        text id PK
+        text name
+        enum role "MECHANIC | ATTENDANT"
+        text email UK
+        text password_hash
+        text phone "opcional"
+        boolean available "DEFAULT true"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    service_catalog {
+        text id PK
+        text name
+        text description "opcional"
+        float price "DOUBLE PRECISION"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    parts {
+        text id PK
+        text name
+        text description "opcional"
+        float price "DOUBLE PRECISION"
+        enum type "PART | SUPPLY, DEFAULT PART"
+        float stock_quantity "DEFAULT 0"
+        enum stock_unit "UNIT | LITER | MILLILITER | GRAM | KILOGRAM | METER"
+        timestamp expires_at "opcional"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    service_orders {
+        text id PK
+        text customer_id FK "ON DELETE RESTRICT, indexado"
+        text vehicle_id FK "ON DELETE RESTRICT, indexado"
+        enum status "RECEIVED ... CLOSED, indexado"
+        int mileage "opcional"
+        text notes "opcional"
+        text mechanic_id FK "opcional, ON DELETE SET NULL"
+        timestamp closed_at "opcional"
+        timestamp created_at "indexado"
+        timestamp updated_at
+    }
+
+    service_order_status_history {
+        text id PK
+        text service_order_id FK "ON DELETE CASCADE, indexado"
+        enum previous_status "NULL so na criacao da OS"
+        enum new_status
+        varchar changed_by "VARCHAR(150), opcional"
+        text notes "opcional"
+        timestamp changed_at "indexado"
+    }
+
+    estimates {
+        text id PK
+        text service_order_id FK "ON DELETE RESTRICT, indexado"
+        enum status "PENDING | APPROVED | REJECTED | NEGOTIATED, indexado"
+        decimal total_amount "DECIMAL(10,2) DEFAULT 0"
+        timestamp valid_until "opcional"
+        timestamp approved_at "opcional"
+        text notes "opcional"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    estimate_items {
+        text id PK
+        text estimate_id FK, UK "ON DELETE CASCADE; UNIQUE (estimate_id, item_type, reference_id)"
+        enum item_type UK "SERVICE | PART"
+        text reference_id UK "sem FK: aponta para service_catalog ou parts"
+        varchar description "VARCHAR(200), snapshot do nome"
+        decimal quantity "DECIMAL(10,3)"
+        decimal unit_price "DECIMAL(10,2), snapshot do preco"
+        decimal total_price "DECIMAL(10,2)"
+        text notes "opcional"
+    }

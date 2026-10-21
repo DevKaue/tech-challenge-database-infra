@@ -55,3 +55,26 @@ resource "aws_vpc_security_group_ingress_rule" "rds_from_client" {
 
   tags = local.tags
 }
+
+# SG dos nós do EKS, publicado pela infra Kubernetes no SSM. Os pods da
+# aplicação usam IPs secundários da ENI do nó e herdam o SG dele, então liberar
+# este SG libera a aplicação. É o lado do contrato que a infra Kubernetes
+# escolheu: ela publica o SG dos nós em vez de anexar o SG de cliente, porque o
+# cluster é aplicado antes do banco e não conhece nada daqui.
+#
+# A Lambda continua no SG de cliente acima. Se o parâmetro não existir, o plan
+# falha aqui, como na descoberta da VPC: a infra Kubernetes não foi aplicada.
+data "aws_ssm_parameter" "eks_node_sg_id" {
+  name = "/${var.project}/${var.environment}/eks/node-sg-id"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "rds_from_eks_nodes" {
+  security_group_id            = aws_security_group.rds.id
+  referenced_security_group_id = data.aws_ssm_parameter.eks_node_sg_id.insecure_value
+  from_port                    = 5432
+  to_port                      = 5432
+  ip_protocol                  = "tcp"
+  description                  = "Postgres a partir dos nos do EKS de ${var.environment}"
+
+  tags = local.tags
+}

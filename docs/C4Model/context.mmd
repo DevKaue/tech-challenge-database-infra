@@ -1,0 +1,29 @@
+graph TD
+    %% Estilos das Classes (mesma paleta do repositório-base)
+    classDef person fill:#084298,stroke:#052c65,stroke-width:2px,color:#ffffff,rx:10px,ry:10px;
+    classDef system fill:#1168bd,stroke:#0b4884,stroke-width:2px,color:#ffffff,rx:8px,ry:8px;
+    classDef extSystem fill:#999999,stroke:#666666,stroke-width:2px,color:#ffffff,rx:8px,ry:8px;
+
+    %% Atores (Personas)
+    DEV["<b>Time de engenharia</b><br/><i>[Person]</i><br/>Propõe mudanças por PR e aprova o deploy de produção"]:::person
+    CLI["<b>Cliente da oficina</b><br/><i>[Person]</i><br/>Autentica por CPF e acompanha a própria OS"]:::person
+
+    %% Sistema em foco
+    S["<b>Banco de dados gerenciado</b><br/><i>[Software System]</i><br/>PostgreSQL no Amazon RDS, por ambiente, com o contrato de conexão publicado no SSM"]:::system
+
+    %% Sistemas externos
+    GHA["<b>GitHub Actions</b><br/><i>[Software System]</i><br/>CI e deploy deste repositório"]:::extSystem
+    K8S["<b>Infraestrutura Kubernetes</b><br/><i>[Software System]</i><br/>VPC, subnets e cluster EKS"]:::extSystem
+    APP["<b>Aplicação da oficina</b><br/><i>[Software System]</i><br/>API NestJS no EKS, dona do schema via Prisma"]:::extSystem
+    FN["<b>Function Serverless</b><br/><i>[Software System]</i><br/>Lambda de autenticação por CPF"]:::extSystem
+    OBS["<b>Datadog / New Relic</b><br/><i>[Software System]</i><br/>Observabilidade externa, opcional"]:::extSystem
+
+    %% Relacionamentos
+    DEV -->|"Abre PR e aprova o environment production"| GHA
+    GHA -->|"terraform plan e apply"| S
+    S -->|"Descobre a rede por tag"| K8S
+    APP -->|"Lê e grava o domínio; aplica migrations"| S
+    FN -->|"Consulta existência e status do cliente"| S
+    CLI -->|"Informa o CPF, via Kong"| FN
+    CLI -->|"Usa a API com o token"| APP
+    S -->|"Encaminha logs do Postgres"| OBS

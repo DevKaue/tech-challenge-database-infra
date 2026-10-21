@@ -9,8 +9,8 @@ variable "environment" {
   type        = string
 
   validation {
-    condition     = contains(["homolog", "prod"], var.environment)
-    error_message = "environment precisa ser homolog ou prod — são os dois ambientes que o desafio exige (homologação e produção)."
+    condition     = contains(["staging", "prod"], var.environment)
+    error_message = "environment precisa ser staging ou prod: homologação e produção, com os mesmos nomes do Kong e da infra Kubernetes."
   }
 }
 
