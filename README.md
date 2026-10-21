@@ -251,7 +251,9 @@ existe depois do reboot. O pipeline não faz esse passo.
 
 [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) roda no push para `develop`
 (staging) e para `main` (prod), e também manualmente. A `homolog` não faz deploy, como
-nos outros três repositórios:
+nos outros três repositórios. O staging só roda com a variável `STAGING_ENABLED=true`:
+enquanto o staging da infra Kubernetes estiver desligado para economizar crédito, o
+push na `develop` fica pulado em vez de falhar.
 
 1. Job `plan`, sem environment: `terraform plan` do ambiente da branch, publicado no
    resumo do run.
