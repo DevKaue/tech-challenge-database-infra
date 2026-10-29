@@ -13,6 +13,7 @@ com state próprio, ciclo de vida próprio e a modelagem de dados documentada e 
 | [TechChallange---Function-Serverless](https://github.com/DevKaue/TechChallange---Function-Serverless) | Function Serverless de autenticação por CPF; lê `customers` |
 | [TechChallenge---Infraestrutura-Kubernetes-com-Terraform](https://github.com/DevKaue/TechChallenge---Infraestrutura-Kubernetes-com-Terraform) | VPC, EKS e Kong; **dona da rede** onde o banco mora |
 | **tech-challenge-database-infra** (este) | **Banco de dados gerenciado (Terraform)** |
+| [tech-challenge-docs](https://github.com/Jean-Carlo-Torres/tech-challenge-docs) | Documentação arquitetural geral: componentes, sequências, RFCs, ADRs e modelo de dados |
 
 ## Propósito
 
@@ -302,8 +303,8 @@ nasce vazio e as tabelas aparecem no `prisma migrate deploy`.
   no mecânico.
 - **Ajuste do modelo na Fase 3:** coluna `customers.status`, enum `CustomerStatus`
   (`ACTIVE`, `INACTIVE`, `BLOCKED`), `NOT NULL DEFAULT 'ACTIVE'`, lida pela Lambda junto
-  com `deleted_at`. A migration é do repositório da aplicação e está no `develop` de lá
-  desde 13/10/2026.
+  com `deleted_at`. A migration (`20261009230000_add_status_to_customers`) é do
+  repositório da aplicação e já está na `main` de lá.
 
 Visão resumida — o diagrama completo, com todas as colunas, está em
 [docs/modelagem-de-dados.md](docs/modelagem-de-dados.md):
@@ -337,6 +338,25 @@ cada índice e restrição de unicidade, e as lacunas conhecidas do modelo.
 **Não se aplica.** Este repositório provisiona infraestrutura; não expõe API e não produz
 artefato executável. Pelo mesmo motivo **não há Dockerfile** aqui, e os jobs de build de
 imagem, validação de manifestos Kubernetes e `kubeconform` não fazem parte do CI.
+
+As APIs que usam este banco são documentadas nos repositórios consumidores: Swagger da
+[aplicação](https://github.com/DevKaue/tech-challenge-app-#apis-swagger-e-links-dos-deploys)
+(`http://<KONG_URL>/api/docs`) e
+[OpenAPI](https://github.com/DevKaue/TechChallange---Function-Serverless/blob/main/docs/api/openapi.yaml) /
+[Postman](https://github.com/DevKaue/TechChallange---Function-Serverless/blob/main/docs/postman/techchallenge-auth.postman_collection.json)
+da Function de autenticação.
+
+### Deploy ativo
+
+O banco não tem endpoint público (subnets privadas, sem IP público). O endereço de cada
+ambiente fica no SSM, em `/techchallenge/<env>/db/endpoint`. O ambiente AWS (AWS Academy)
+**não está de pé no momento**; com ele no ar, o deploy é conferido por:
+
+```bash
+aws rds describe-db-instances --db-instance-identifier techchallenge-prod \
+  --query 'DBInstances[0].DBInstanceStatus'
+aws ssm get-parameters-by-path --path /techchallenge/prod/db/ --query 'Parameters[].Name'
+```
 
 ## Observabilidade
 
@@ -416,6 +436,7 @@ inaceitável** — quando o critério for atingido, a dívida vira trabalho.
 
 ## Documentação
 
+- [tech-challenge-docs](https://github.com/Jean-Carlo-Torres/tech-challenge-docs) — documentação arquitetural geral do projeto
 - [QUICKSTART.md](QUICKSTART.md) — **comece aqui**: validar, subir, conferir, derrubar e o que fazer quando der errado
 - [docs/modelagem-de-dados.md](docs/modelagem-de-dados.md) — ER, relacionamentos, índices e ajuste do modelo
 - [docs/RFCs](docs/RFCs) — propostas técnicas e a justificativa formal da escolha do banco
